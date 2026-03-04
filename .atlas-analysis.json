@@ -1,0 +1,163 @@
+{
+  "projectType": "framework",
+  "projectName": "LangChain",
+  "projectDescription": "A framework for building agents and LLM-powered applications through composable components and integrations.",
+  "theme": "aspen",
+  "primaryColor": "#1C3FAA",
+  "lightColor": "#3B82F6",
+  "darkColor": "#1E293B",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/runnables",
+              "concepts/agents",
+              "concepts/chains",
+              "concepts/messages",
+              "concepts/tools"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/building-agents",
+              "guides/chat-models",
+              "guides/embeddings",
+              "guides/retrieval",
+              "guides/output-parsing",
+              "guides/streaming",
+              "guides/debugging"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/custom-tools",
+              "advanced/middleware",
+              "advanced/rate-limiting",
+              "advanced/performance"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core",
+            "pages": [
+              "api/core/runnables",
+              "api/core/language-models",
+              "api/core/messages",
+              "api/core/prompts",
+              "api/core/output-parsers",
+              "api/core/retrievers",
+              "api/core/vectorstores",
+              "api/core/document-loaders"
+            ]
+          },
+          {
+            "group": "LangChain",
+            "pages": [
+              "api/langchain/agents",
+              "api/langchain/chat-models",
+              "api/langchain/embeddings",
+              "api/langchain/tools",
+              "api/langchain/rate-limiters"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "integrations/overview"
+            ]
+          },
+          {
+            "group": "Chat Models",
+            "pages": [
+              "integrations/chat-models/openai",
+              "integrations/chat-models/anthropic",
+              "integrations/chat-models/ollama",
+              "integrations/chat-models/groq",
+              "integrations/chat-models/fireworks",
+              "integrations/chat-models/mistralai",
+              "integrations/chat-models/deepseek",
+              "integrations/chat-models/xai",
+              "integrations/chat-models/perplexity"
+            ]
+          },
+          {
+            "group": "Embeddings",
+            "pages": [
+              "integrations/embeddings/openai",
+              "integrations/embeddings/huggingface",
+              "integrations/embeddings/nomic",
+              "integrations/embeddings/ollama"
+            ]
+          },
+          {
+            "group": "Vector Stores",
+            "pages": [
+              "integrations/vectorstores/chroma",
+              "integrations/vectorstores/qdrant"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "integrations/tools/exa",
+              "integrations/tools/openrouter"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Composable components for LLM applications",
+    "Multi-agent orchestration with LangGraph",
+    "Extensive model provider integrations",
+    "Retrieval augmented generation (RAG)",
+    "Streaming and async support",
+    "Production monitoring with LangSmith",
+    "Modular architecture with langchain-core",
+    "Text splitting and document processing"
+  ],
+  "publicApiSurface": [
+    "langchain_core.runnables.Runnable",
+    "langchain_core.language_models.BaseChatModel",
+    "langchain_core.language_models.BaseLLM",
+    "langchain_core.embeddings.Embeddings",
+    "langchain_core.messages.BaseMessage",
+    "langchain_core.prompts.ChatPromptTemplate",
+    "langchain_core.output_parsers.BaseOutputParser",
+    "langchain_core.retrievers.BaseRetriever",
+    "langchain_core.vectorstores.VectorStore",
+    "langchain_core.tools.BaseTool",
+    "langchain_core.agents.AgentAction",
+    "langchain_core.agents.AgentFinish",
+    "langchain.agents",
+    "langchain.chat_models",
+    "langchain.embeddings",
+    "langchain.tools",
+    "langchain.rate_limiters"
+  ]
+}
