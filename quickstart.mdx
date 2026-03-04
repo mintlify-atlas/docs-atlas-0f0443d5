@@ -1,80 +1,370 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Build your first LLM application with LangChain in minutes
 ---
 
-## Get started in three steps
+Get started with LangChain by building a simple chat application that responds to user queries.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+- Python 3.10 or higher
+- An API key from a model provider (OpenAI, Anthropic, etc.)
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+## Installation
+
+<Steps>
+  <Step title="Install LangChain">
+    Install LangChain and a model provider:
+
+    <CodeGroup>
+    ```bash OpenAI
+    pip install langchain langchain-openai
+    ```
+
+    ```bash Anthropic
+    pip install langchain langchain-anthropic
+    ```
+
+    ```bash Ollama (local)
+    pip install langchain langchain-ollama
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Set up your API key">
+    Set your API key as an environment variable:
+
+    <CodeGroup>
+    ```bash OpenAI
+    export OPENAI_API_KEY="your-api-key-here"
+    ```
+
+    ```bash Anthropic
+    export ANTHROPIC_API_KEY="your-api-key-here"
+    ```
+    </CodeGroup>
+
+    <Tip>
+      For Ollama, you don't need an API key. Just make sure Ollama is running locally: `ollama serve`
+    </Tip>
+  </Step>
+</Steps>
+
+## Your first chat application
+
+Create a simple chat application that responds to user messages:
+
+<Tabs>
+  <Tab title="OpenAI">
+    ```python quickstart.py
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    # Initialize the model
+    model = ChatOpenAI(model="gpt-4o-mini")
+
+    # Create messages
+    messages = [
+        SystemMessage(content="You are a helpful assistant."),
+        HumanMessage(content="What is LangChain?")
+    ]
+
+    # Get response
+    response = model.invoke(messages)
+    print(response.content)
+    ```
+  </Tab>
+
+  <Tab title="Anthropic">
+    ```python quickstart.py
+    from langchain_anthropic import ChatAnthropic
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    # Initialize the model
+    model = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+
+    # Create messages
+    messages = [
+        SystemMessage(content="You are a helpful assistant."),
+        HumanMessage(content="What is LangChain?")
+    ]
+
+    # Get response
+    response = model.invoke(messages)
+    print(response.content)
+    ```
+  </Tab>
+
+  <Tab title="Ollama">
+    ```python quickstart.py
+    from langchain_ollama import ChatOllama
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    # Initialize the model (requires Ollama running locally)
+    model = ChatOllama(model="llama3")
+
+    # Create messages
+    messages = [
+        SystemMessage(content="You are a helpful assistant."),
+        HumanMessage(content="What is LangChain?")
+    ]
+
+    # Get response
+    response = model.invoke(messages)
+    print(response.content)
+    ```
+  </Tab>
+</Tabs>
+
+Run your application:
+
+```bash
+python quickstart.py
+```
+
+## Using prompt templates
+
+Make your prompts reusable with templates:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+# Create a prompt template
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
+    ("human", "{text}")
+])
+
+# Initialize model
+model = ChatOpenAI(model="gpt-4o-mini")
+
+# Chain prompt and model
+chain = prompt | model
+
+# Invoke with inputs
+response = chain.invoke({
+    "input_language": "English",
+    "output_language": "French",
+    "text": "Hello, how are you?"
+})
+
+print(response.content)
+```
+
+## Chaining components
+
+LangChain uses the `|` operator to chain components together:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+# Define components
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}")
+])
+
+model = ChatOpenAI(model="gpt-4o-mini")
+output_parser = StrOutputParser()
+
+# Chain them together
+chain = prompt | model | output_parser
+
+# Invoke returns a string directly
+result = chain.invoke({"input": "Tell me a joke about programming"})
+print(result)
+```
+
+## Streaming responses
+
+Stream responses token-by-token for better user experience:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}")
+])
+
+model = ChatOpenAI(model="gpt-4o-mini")
+chain = prompt | model
+
+# Stream the response
+for chunk in chain.stream({"input": "Write a short poem about coding"}):
+    print(chunk.content, end="", flush=True)
+```
+
+## Building an agent with tools
+
+Create an agent that can use tools to answer questions:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain_core.tools import tool
+
+# Define a custom tool
+@tool
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers together."""
+    return a * b
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two numbers together."""
+    return a + b
+
+# Create agent with tools
+agent = create_agent(
+    model="openai:gpt-4o-mini",
+    tools=[multiply, add],
+)
+
+# Invoke the agent
+response = agent.invoke({
+    "messages": [{"role": "user", "content": "What is 25 * 4 + 10?"}]
+})
+
+print(response["messages"][-1]["content"])
+```
+
+<Note>
+  Agents use tools to answer questions that require computation or external data access.
+</Note>
+
+## Retrieval augmented generation (RAG)
+
+Build a RAG system that answers questions based on your documents:
+
+```python
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.documents import Document
+from langchain_chroma import Chroma
+
+# Sample documents
+docs = [
+    Document(page_content="LangChain is a framework for building LLM applications."),
+    Document(page_content="LangChain provides integrations with 100+ model providers."),
+    Document(page_content="Agents can use tools to perform actions and gather information."),
+]
+
+# Create vector store
+vectorstore = Chroma.from_documents(
+    documents=docs,
+    embedding=OpenAIEmbeddings()
+)
+
+# Create retriever
+retriever = vectorstore.as_retriever()
+
+# Create RAG chain
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Answer based on this context: {context}"),
+    ("human", "{question}")
+])
+
+model = ChatOpenAI(model="gpt-4o-mini")
+
+# Simple RAG function
+def rag_chain(question: str) -> str:
+    # Retrieve relevant docs
+    docs = retriever.invoke(question)
+    context = "\n".join([doc.page_content for doc in docs])
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    # Generate answer
+    chain = prompt | model
+    response = chain.invoke({"context": context, "question": question})
+    return response.content
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+# Ask a question
+answer = rag_chain("What is LangChain?")
+print(answer)
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Core concepts" icon="book" href="/concepts/architecture">
+    Learn about the framework architecture and key abstractions
+  </Card>
+  <Card title="Building agents" icon="robot" href="/guides/building-agents">
+    Build more sophisticated agents with custom tools
+  </Card>
+  <Card title="Chat models" icon="comments" href="/guides/chat-models">
+    Explore different chat model providers and features
+  </Card>
+  <Card title="Retrieval (RAG)" icon="magnifying-glass" href="/guides/retrieval">
+    Build advanced RAG applications
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Common patterns
+
+<AccordionGroup>
+  <Accordion title="Error handling">
+    Handle API errors gracefully:
+
+    ```python
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage
+
+    model = ChatOpenAI(model="gpt-4o-mini")
+
+    try:
+        response = model.invoke([HumanMessage(content="Hello")])
+        print(response.content)
+    except Exception as e:
+        print(f"Error: {e}")
+    ```
+  </Accordion>
+
+  <Accordion title="Async execution">
+    Use async for concurrent operations:
+
+    ```python
+    import asyncio
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage
+
+    model = ChatOpenAI(model="gpt-4o-mini")
+
+    async def get_response(question: str):
+        response = await model.ainvoke([HumanMessage(content=question)])
+        return response.content
+
+    # Run multiple queries concurrently
+    async def main():
+        questions = ["What is AI?", "What is ML?", "What is LLM?"]
+        responses = await asyncio.gather(*[get_response(q) for q in questions])
+        for q, r in zip(questions, responses):
+            print(f"Q: {q}\nA: {r}\n")
+
+    asyncio.run(main())
+    ```
+  </Accordion>
+
+  <Accordion title="Configuration">
+    Configure model parameters:
+
+    ```python
+    from langchain_openai import ChatOpenAI
+
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0.7,  # Controls randomness (0-1)
+        max_tokens=500,   # Maximum response length
+        timeout=30,       # Request timeout in seconds
+    )
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Join the [LangChain community](https://forum.langchain.com) to ask questions and share your projects!
+</Tip>
