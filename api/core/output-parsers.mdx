@@ -1,0 +1,486 @@
+---
+title: Output Parsers
+description: Classes for parsing and structuring LLM outputs
+---
+
+## Overview
+
+Output parsers transform raw LLM text into structured data. They support both complete outputs and streaming partial outputs.
+
+## BaseOutputParser
+
+Base class for parsing LLM outputs.
+
+**Source:** `langchain_core.output_parsers.base:136`
+
+**Inherits:** `BaseLLMOutputParser`, `RunnableSerializable[LanguageModelOutput, T]`
+
+### Type Parameters
+
+<ParamField path="T" type="TypeVar">
+  The output type after parsing
+</ParamField>
+
+### Properties
+
+<ResponseField name="InputType" type="type">
+  Input type for the parser (`str | BaseMessage`)
+</ResponseField>
+
+<ResponseField name="OutputType" type="type[T]">
+  Output type after parsing (inferred from generic)
+</ResponseField>
+
+### Core Methods
+
+#### parse
+
+```python
+def parse(self, text: str) -> T
+```
+
+Parse a string output from an LLM.
+
+<ParamField path="text" type="str" required>
+  Text output from the LLM
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Parsed output
+</ResponseField>
+
+#### parse_result
+
+```python
+def parse_result(
+    self,
+    result: list[Generation],
+    *,
+    partial: bool = False
+) -> T
+```
+
+Parse a list of LLM generation candidates.
+
+<ParamField path="result" type="list[Generation]" required>
+  List of generation candidates from the LLM
+</ParamField>
+
+<ParamField path="partial" type="bool" default="False">
+  Whether to parse partial results (useful for streaming)
+</ParamField>
+
+<ResponseField name="return" type="T">
+  Parsed output
+</ResponseField>
+
+#### aparse
+
+```python
+async def aparse(self, text: str) -> T
+```
+
+Async version of `parse`.
+
+#### aparse_result
+
+```python
+async def aparse_result(
+    self,
+    result: list[Generation],
+    *,
+    partial: bool = False
+) -> T
+```
+
+Async version of `parse_result`.
+
+#### invoke
+
+```python
+def invoke(
+    self,
+    input: str | BaseMessage,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> T
+```
+
+Parse output via the Runnable interface.
+
+#### get_format_instructions
+
+```python
+def get_format_instructions(self) -> str
+```
+
+Get instructions for how the LLM should format its output.
+
+<ResponseField name="return" type="str">
+  Format instructions to include in the prompt
+</ResponseField>
+
+## JsonOutputParser
+
+Parse LLM output as JSON.
+
+**Source:** `langchain_core.output_parsers.json:31`
+
+**Inherits:** `BaseCumulativeTransformOutputParser[Any]`
+
+### Properties
+
+<ResponseField name="pydantic_object" type="type[BaseModel] | None" default="None">
+  Optional Pydantic model for validation
+</ResponseField>
+
+### Methods
+
+#### parse_result
+
+```python
+def parse_result(
+    self,
+    result: list[Generation],
+    *,
+    partial: bool = False
+) -> Any
+```
+
+Parse result as JSON.
+
+<ParamField path="partial" type="bool" default="False">
+  If `True`, parse partial JSON (useful for streaming)
+</ParamField>
+
+<ResponseField name="return" type="Any">
+  Parsed JSON object (dict or list)
+</ResponseField>
+
+#### parse
+
+```python
+def parse(self, text: str) -> Any
+```
+
+Parse text as JSON.
+
+### Example
+
+```python
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+from pydantic import BaseModel, Field
+
+class Joke(BaseModel):
+    setup: str = Field(description="The setup of the joke")
+    punchline: str = Field(description="The punchline")
+
+parser = JsonOutputParser(pydantic_object=Joke)
+
+prompt = PromptTemplate(
+    template="Tell me a joke.\n{format_instructions}",
+    input_variables=[],
+    partial_variables={"format_instructions": parser.get_format_instructions()}
+)
+
+chain = prompt | model | parser
+result = chain.invoke({})  # {"setup": "...", "punchline": "..."}
+```
+
+## PydanticOutputParser
+
+Parse LLM output into a Pydantic model.
+
+**Source:** `langchain_core.output_parsers.pydantic`
+
+**Inherits:** `BaseOutputParser[TBaseModel]`
+
+### Type Parameters
+
+<ParamField path="TBaseModel" type="TypeVar">
+  Pydantic model type to parse into
+</ParamField>
+
+### Properties
+
+<ResponseField name="pydantic_object" type="type[TBaseModel]" required>
+  Pydantic model class to parse into
+</ResponseField>
+
+### Constructor
+
+```python
+def __init__(self, pydantic_object: type[TBaseModel])
+```
+
+<ParamField path="pydantic_object" type="type[TBaseModel]" required>
+  Pydantic model class
+</ParamField>
+
+### Methods
+
+#### parse
+
+```python
+def parse(self, text: str) -> TBaseModel
+```
+
+Parse text into a Pydantic model instance.
+
+<ResponseField name="return" type="TBaseModel">
+  Validated Pydantic model instance
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+
+class Person(BaseModel):
+    name: str = Field(description="Person's name")
+    age: int = Field(description="Person's age")
+
+parser = PydanticOutputParser(pydantic_object=Person)
+
+chain = prompt | model | parser
+result = chain.invoke({...})  # Person(name="...", age=...)
+```
+
+## StrOutputParser
+
+Simple parser that returns the text output as a string.
+
+**Source:** `langchain_core.output_parsers.string`
+
+**Inherits:** `BaseOutputParser[str]`
+
+### Methods
+
+#### parse
+
+```python
+def parse(self, text: str) -> str
+```
+
+Return the text unchanged.
+
+### Example
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+
+chain = prompt | model | StrOutputParser()
+result = chain.invoke({...})  # "string output"
+```
+
+## CommaSeparatedListOutputParser
+
+Parse output into a comma-separated list.
+
+**Source:** `langchain_core.output_parsers.list`
+
+**Inherits:** `BaseOutputParser[list[str]]`
+
+### Methods
+
+#### parse
+
+```python
+def parse(self, text: str) -> list[str]
+```
+
+Split text by commas and return list of stripped strings.
+
+### Example
+
+```python
+from langchain_core.output_parsers import CommaSeparatedListOutputParser
+
+parser = CommaSeparatedListOutputParser()
+parser.parse("apple, banana, orange")  # ["apple", "banana", "orange"]
+```
+
+## XMLOutputParser
+
+Parse XML output into a dictionary.
+
+**Source:** `langchain_core.output_parsers.xml`
+
+**Inherits:** `BaseOutputParser[dict]`
+
+### Properties
+
+<ResponseField name="tags" type="list[str] | None" default="None">
+  Optional list of tags to parse. If `None`, parses all tags.
+</ResponseField>
+
+### Methods
+
+#### parse
+
+```python
+def parse(self, text: str) -> dict
+```
+
+Parse XML text into a nested dictionary.
+
+### Example
+
+```python
+from langchain_core.output_parsers import XMLOutputParser
+
+parser = XMLOutputParser()
+parser.parse(
+    "<person><name>John</name><age>30</age></person>"
+)
+# {"person": {"name": "John", "age": "30"}}
+```
+
+## OpenAIToolsOutputParser
+
+Parse tool calls from OpenAI format.
+
+**Source:** `langchain_core.output_parsers.openai_tools`
+
+**Inherits:** `BaseGenerationOutputParser`
+
+### Methods
+
+#### parse_result
+
+```python
+def parse_result(
+    self,
+    result: list[Generation],
+    *,
+    partial: bool = False
+) -> list[dict[str, Any]]
+```
+
+Extract tool calls from generation result.
+
+<ResponseField name="return" type="list[dict[str, Any]]">
+  List of tool call dictionaries
+</ResponseField>
+
+## JsonOutputKeyToolsParser
+
+Extract specific tools from OpenAI tool calls and parse as JSON.
+
+**Source:** `langchain_core.output_parsers.openai_tools`
+
+**Inherits:** `BaseGenerationOutputParser`
+
+### Properties
+
+<ResponseField name="key_name" type="str" required>
+  Name of the tool to extract
+</ResponseField>
+
+<ResponseField name="first_tool_only" type="bool" default="False">
+  Whether to return only the first matching tool call
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.output_parsers.openai_tools import JsonOutputKeyToolsParser
+
+parser = JsonOutputKeyToolsParser(key_name="search", first_tool_only=True)
+
+chain = model.bind_tools([search_tool]) | parser
+result = chain.invoke("search for cats")  # {"query": "cats"}
+```
+
+## PydanticToolsParser
+
+Parse tool calls into Pydantic models.
+
+**Source:** `langchain_core.output_parsers.openai_tools`
+
+**Inherits:** `BaseGenerationOutputParser`
+
+### Properties
+
+<ResponseField name="tools" type="list[type[BaseModel]]" required>
+  List of Pydantic model classes corresponding to tools
+</ResponseField>
+
+<ResponseField name="first_tool_only" type="bool" default="False">
+  Whether to return only the first tool call
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.output_parsers.openai_tools import PydanticToolsParser
+from pydantic import BaseModel, Field
+
+class SearchArgs(BaseModel):
+    query: str = Field(description="Search query")
+
+parser = PydanticToolsParser(tools=[SearchArgs], first_tool_only=True)
+
+chain = model.bind_tools([SearchArgs]) | parser
+result = chain.invoke("search for cats")  # SearchArgs(query="cats")
+```
+
+## BaseCumulativeTransformOutputParser
+
+Base class for parsers that support streaming with partial outputs.
+
+**Source:** `langchain_core.output_parsers.transform`
+
+**Inherits:** `BaseOutputParser[T]`
+
+### Methods
+
+#### transform
+
+```python
+def transform(
+    self,
+    input: Iterator[str | BaseMessage],
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> Iterator[T]
+```
+
+Transform an iterator of inputs into an iterator of outputs.
+
+#### atransform
+
+```python
+async def atransform(
+    self,
+    input: AsyncIterator[str | BaseMessage],
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> AsyncIterator[T]
+```
+
+Async version of `transform`.
+
+## OutputParserException
+
+Exception raised when output parsing fails.
+
+**Source:** `langchain_core.exceptions`
+
+**Inherits:** `ValueError`
+
+### Properties
+
+<ResponseField name="llm_output" type="str | None">
+  The output from the LLM that failed to parse
+</ResponseField>
+
+<ResponseField name="observation" type="str | None">
+  Optional observation about why parsing failed
+</ResponseField>
+
+<ResponseField name="send_to_llm" type="bool">
+  Whether to send the error back to the LLM for correction
+</ResponseField>

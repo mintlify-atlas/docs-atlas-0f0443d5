@@ -1,0 +1,345 @@
+---
+title: Chroma
+---
+
+Chroma is an open-source vector database designed for storing and querying embeddings. It supports in-memory, persistent local storage, and client-server deployments.
+
+## Installation
+
+Install the required packages:
+
+```bash
+pip install -qU langchain-chroma chromadb
+```
+
+## Setup
+
+Chroma can be configured in several ways:
+
+### In-Memory (Default)
+
+```python
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+vector_store = Chroma(
+    collection_name="my_collection",
+    embedding_function=OpenAIEmbeddings(),
+)
+```
+
+### Persistent Storage
+
+```python
+vector_store = Chroma(
+    collection_name="my_collection",
+    embedding_function=OpenAIEmbeddings(),
+    persist_directory="./chroma_db",
+)
+```
+
+### HTTP Client (Remote Server)
+
+```python
+vector_store = Chroma(
+    collection_name="my_collection",
+    embedding_function=OpenAIEmbeddings(),
+    host="localhost",
+    port=8000,
+)
+```
+
+### Chroma Cloud
+
+```python
+vector_store = Chroma(
+    collection_name="my_collection",
+    embedding_function=OpenAIEmbeddings(),
+    chroma_cloud_api_key="your-api-key",
+    tenant="your-tenant-id",
+    database="your-database-name",
+)
+```
+
+## Usage
+
+### Adding Documents
+
+Add documents with metadata and optional IDs:
+
+```python
+from langchain_core.documents import Document
+
+documents = [
+    Document(page_content="foo", metadata={"baz": "bar"}),
+    Document(page_content="thud", metadata={"bar": "baz"}),
+]
+
+ids = ["1", "2"]
+vector_store.add_documents(documents=documents, ids=ids)
+```
+
+### Creating from Texts
+
+```python
+texts = ["foo", "bar", "baz"]
+metadatas = [{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}]
+
+vector_store = Chroma.from_texts(
+    texts=texts,
+    embedding=OpenAIEmbeddings(),
+    metadatas=metadatas,
+    collection_name="my_collection",
+    persist_directory="./chroma_db",
+)
+```
+
+### Similarity Search
+
+Search for similar documents:
+
+```python
+results = vector_store.similarity_search(
+    query="thud",
+    k=2,
+)
+
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+### Search with Score
+
+```python
+results = vector_store.similarity_search_with_score(
+    query="qux",
+    k=2,
+)
+
+for doc, score in results:
+    print(f"* [SIM={score:.3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+### Search with Metadata Filter
+
+```python
+results = vector_store.similarity_search(
+    query="thud",
+    k=1,
+    filter={"baz": "bar"},
+)
+```
+
+### Maximal Marginal Relevance (MMR)
+
+MMR optimizes for both similarity and diversity:
+
+```python
+results = vector_store.max_marginal_relevance_search(
+    query="thud",
+    k=2,
+    fetch_k=10,
+    lambda_mult=0.5,  # 0 = max diversity, 1 = min diversity
+)
+```
+
+## Key Methods
+
+### add_documents
+
+Add documents to the vector store:
+
+```python
+vector_store.add_documents(
+    documents=documents,
+    ids=ids,  # Optional list of IDs
+)
+```
+
+### similarity_search
+
+Find similar documents:
+
+```python
+vector_store.similarity_search(
+    query="search query",
+    k=4,  # Number of results
+    filter=None,  # Metadata filter
+)
+```
+
+### similarity_search_by_vector
+
+Search using an embedding vector:
+
+```python
+embedding = [0.1, 0.2, 0.3, ...]  # Your embedding vector
+results = vector_store.similarity_search_by_vector(
+    embedding=embedding,
+    k=4,
+)
+```
+
+### update_documents
+
+Update existing documents:
+
+```python
+updated_doc = Document(
+    page_content="updated content",
+    metadata={"updated": True},
+)
+
+vector_store.update_documents(
+    ids=["1"],
+    documents=[updated_doc],
+)
+```
+
+### delete
+
+Delete documents by ID:
+
+```python
+vector_store.delete(ids=["1", "2"])
+```
+
+### get_by_ids
+
+Retrieve documents by their IDs:
+
+```python
+docs = vector_store.get_by_ids(["1", "2"])
+```
+
+## Advanced Features
+
+### Hybrid Search
+
+Chroma supports hybrid search combining dense and sparse vectors:
+
+```python
+from chromadb import Search, K, Knn, Rrf
+
+hybrid_rank = Rrf(
+    ranks=[
+        Knn(query="query", return_rank=True, limit=300),
+        Knn(query="query learning applications", key="sparse_embedding")
+    ],
+    weights=[2.0, 1.0],  # Dense 2x more important
+    k=60
+)
+
+search = (Search()
+    .where((K("language") == "en") & (K("year") >= 2020))
+    .rank(hybrid_rank)
+    .limit(10)
+    .select(K.DOCUMENT, K.SCORE, "title", "year")
+)
+
+results = vector_store.hybrid_search(search)
+```
+
+### Image Search
+
+If your embedding function supports image embeddings:
+
+```python
+# Add images
+image_uris = ["path/to/image1.jpg", "path/to/image2.jpg"]
+vector_store.add_images(uris=image_uris)
+
+# Search by image
+results = vector_store.similarity_search_by_image(
+    uri="path/to/query_image.jpg",
+    k=5,
+)
+```
+
+### Collection Management
+
+```python
+# Reset collection (delete and recreate)
+vector_store.reset_collection()
+
+# Delete collection entirely
+vector_store.delete_collection()
+
+# Fork a collection
+new_store = vector_store.fork(new_name="forked_collection")
+```
+
+### As Retriever
+
+Use Chroma as a retriever in chains:
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 5, "fetch_k": 20, "lambda_mult": 0.5},
+)
+
+docs = retriever.invoke("query")
+```
+
+## Async Support
+
+Chroma supports async operations:
+
+```python
+# Add documents
+await vector_store.aadd_documents(documents=documents, ids=ids)
+
+# Search
+results = await vector_store.asimilarity_search(query="thud", k=1)
+
+# Search with score
+results = await vector_store.asimilarity_search_with_score(query="qux", k=1)
+
+# Delete
+await vector_store.adelete(ids=["1"])
+```
+
+## Configuration Options
+
+### Distance Metrics
+
+Configure the distance function via `collection_configuration`:
+
+```python
+from chromadb.api import CreateCollectionConfiguration
+
+vector_store = Chroma(
+    collection_name="my_collection",
+    embedding_function=OpenAIEmbeddings(),
+    collection_configuration={"hnsw": {"space": "cosine"}},  # or "l2", "ip"
+)
+```
+
+Available distance metrics:
+- `cosine`: Cosine similarity (default)
+- `l2`: Euclidean distance
+- `ip`: Inner product
+
+### Client Settings
+
+Customize Chroma client behavior:
+
+```python
+import chromadb
+
+settings = chromadb.Settings(
+    anonymized_telemetry=False,
+    allow_reset=True,
+)
+
+vector_store = Chroma(
+    collection_name="my_collection",
+    embedding_function=OpenAIEmbeddings(),
+    client_settings=settings,
+)
+```
+
+## API Reference
+
+For detailed API information, see the [Chroma class documentation](https://docs.langchain.com/oss/python/integrations/providers/chroma).

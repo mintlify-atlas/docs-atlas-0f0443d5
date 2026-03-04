@@ -1,0 +1,409 @@
+---
+title: 'Building Custom Tools'
+description: 'Create custom tools to extend agent capabilities with your own functions and APIs'
+icon: 'wrench'
+---
+
+## Overview
+
+Custom tools allow you to extend LangChain agents with your own functions, APIs, and integrations. The framework provides multiple approaches depending on your needs, from simple function decorators to full class-based implementations.
+
+## Creating Tools with the @tool Decorator
+
+The simplest way to create a tool is using the `@tool` decorator. The function signature and docstring automatically generate the tool schema.
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def search_database(query: str, limit: int = 10) -> str:
+    """Search the product database for matching items.
+    
+    Args:
+        query: The search query string.
+        limit: Maximum number of results to return.
+    
+    Returns:
+        JSON string of matching products.
+    """
+    # Your implementation here
+    results = db.search(query, limit=limit)
+    return json.dumps(results)
+```
+
+<Note>
+The `@tool` decorator automatically parses your function's docstring (Google style) to extract parameter descriptions for the LLM.
+</Note>
+
+## Async Tools
+
+For I/O-bound operations, define async tools for better performance:
+
+```python
+from langchain_core.tools import tool
+import aiohttp
+
+@tool
+async def fetch_weather(city: str) -> str:
+    """Get current weather for a city.
+    
+    Args:
+        city: The city name to fetch weather for.
+    
+    Returns:
+        Weather description and temperature.
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.weather.com/{city}") as resp:
+            data = await resp.json()
+            return f"{data['condition']}, {data['temp']}°F"
+```
+
+## StructuredTool for Complex Schemas
+
+When you need fine-grained control over the input schema, use `StructuredTool.from_function()`:
+
+```python
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, Field
+
+class DatabaseSearchInput(BaseModel):
+    query: str = Field(description="Search query text")
+    filters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional filters like category, price_range"
+    )
+    limit: int = Field(default=10, ge=1, le=100, description="Max results")
+
+def search_with_filters(query: str, filters: dict[str, str], limit: int) -> str:
+    """Search database with advanced filtering."""
+    # Implementation
+    return results
+
+search_tool = StructuredTool.from_function(
+    func=search_with_filters,
+    name="search_database",
+    description="Search products with filtering options",
+    args_schema=DatabaseSearchInput,
+)
+```
+
+### Parameters
+
+<ParamField path="func" type="Callable" required>
+  The function to execute when the tool is called.
+</ParamField>
+
+<ParamField path="name" type="str">
+  Tool name. Defaults to function name.
+</ParamField>
+
+<ParamField path="description" type="str">
+  Tool description for the LLM. Defaults to function docstring.
+</ParamField>
+
+<ParamField path="args_schema" type="type[BaseModel]">
+  Pydantic model defining input schema. Auto-generated if not provided.
+</ParamField>
+
+<ParamField path="return_direct" type="bool" default="False">
+  If `True`, return tool output directly without further agent processing.
+</ParamField>
+
+<ParamField path="response_format" type="str" default="content">
+  Either `"content"` (return string) or `"content_and_artifact"` (return tuple of display content and full artifact).
+</ParamField>
+
+## BaseTool for Full Control
+
+Extend `BaseTool` for maximum flexibility, including custom error handling and state management:
+
+```python
+from langchain_core.tools import BaseTool
+from langchain_core.callbacks import CallbackManagerForToolRun
+from typing import Optional
+
+class CustomDatabaseTool(BaseTool):
+    name: str = "database_query"
+    description: str = "Execute SQL queries against the database"
+    
+    # Custom attributes
+    connection_string: str
+    max_retries: int = 3
+    
+    def _run(
+        self,
+        query: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None,
+    ) -> str:
+        """Execute the query synchronously."""
+        for attempt in range(self.max_retries):
+            try:
+                conn = create_connection(self.connection_string)
+                result = conn.execute(query)
+                return format_results(result)
+            except DatabaseError as e:
+                if attempt == self.max_retries - 1:
+                    return f"Error after {self.max_retries} attempts: {e}"
+                time.sleep(2 ** attempt)  # Exponential backoff
+    
+    async def _arun(
+        self,
+        query: str,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> str:
+        """Execute the query asynchronously."""
+        conn = await create_async_connection(self.connection_string)
+        result = await conn.execute(query)
+        return format_results(result)
+```
+
+### Required Methods
+
+<ResponseField name="_run" type="method" required>
+  Synchronous execution method. Must be implemented if tool supports sync usage.
+  
+  **Parameters:**
+  - `*args`: Tool arguments
+  - `run_manager`: Optional callback manager
+  - `**kwargs`: Additional keyword arguments
+  
+  **Returns:** Tool execution result (typically `str`)
+</ResponseField>
+
+<ResponseField name="_arun" type="method">
+  Async execution method. Implement for async support. Falls back to running `_run` in executor if not provided.
+  
+  **Parameters:**
+  - `*args`: Tool arguments  
+  - `run_manager`: Optional async callback manager
+  - `**kwargs`: Additional keyword arguments
+  
+  **Returns:** Tool execution result (typically `str`)
+</ResponseField>
+
+## Advanced Patterns
+
+### Tool with Injected Config
+
+Access runtime configuration within tools using the `RunnableConfig` parameter:
+
+```python
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool
+
+@tool
+def context_aware_search(query: str, config: RunnableConfig) -> str:
+    """Search with access to runtime context.
+    
+    Args:
+        query: Search query.
+        config: Runtime configuration with metadata, tags, etc.
+    """
+    # Access user context from config
+    user_id = config.get("configurable", {}).get("user_id")
+    
+    # Personalized search based on user
+    results = search_engine.search(query, user_id=user_id)
+    return results
+```
+
+### Error Handling
+
+Tools can raise `ToolException` for graceful error handling:
+
+```python
+from langchain_core.tools import tool, ToolException
+
+@tool
+def validate_and_search(query: str) -> str:
+    """Search with validation.
+    
+    Args:
+        query: Search query to validate and execute.
+    """
+    if len(query) < 3:
+        raise ToolException(
+            "Query too short. Please provide at least 3 characters."
+        )
+    
+    if contains_sql_injection(query):
+        raise ToolException(
+            "Invalid query detected. Please check your input."
+        )
+    
+    return search(query)
+```
+
+### Tool Response Format
+
+Return structured artifacts alongside display content:
+
+```python
+from langchain_core.tools import StructuredTool
+
+def fetch_with_metadata(url: str) -> tuple[str, dict]:
+    """Fetch URL and return content with metadata."""
+    response = requests.get(url)
+    
+    # Return (display_content, full_artifact)
+    return (
+        response.text[:500],  # Show first 500 chars to LLM
+        {
+            "full_text": response.text,
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+        }
+    )
+
+fetch_tool = StructuredTool.from_function(
+    func=fetch_with_metadata,
+    name="fetch_url",
+    description="Fetch URL content with metadata",
+    response_format="content_and_artifact",
+)
+```
+
+## Tool Registration
+
+Add custom tools to agents:
+
+```python
+from langchain.agents import create_agent
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+
+agent = create_agent(
+    model=model,
+    tools=[
+        search_database,
+        fetch_weather,
+        custom_db_tool,
+    ],
+)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Write Clear Descriptions">
+    Tool names and descriptions are crucial for the LLM to select the right tool. Be specific about what the tool does and when to use it.
+    
+    ```python
+    @tool
+    def calculate_roi(investment: float, return_value: float, period_years: int) -> str:
+        """Calculate Return on Investment (ROI) percentage.
+        
+        Use this when the user asks about investment returns, profitability,
+        or financial performance metrics. DO NOT use for simple arithmetic.
+        
+        Args:
+            investment: Initial investment amount in dollars.
+            return_value: Final value in dollars.
+            period_years: Investment period in years.
+        """
+        roi = ((return_value - investment) / investment) * 100
+        annual = roi / period_years
+        return f"ROI: {roi:.2f}% ({annual:.2f}% annually)"
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Type Hints">
+    Type hints are required for automatic schema generation:
+    
+    ```python
+    # Good: Type hints enable schema generation
+    @tool
+    def good_tool(x: int, y: str) -> str:
+        """Well-typed tool."""
+        return f"{y}: {x}"
+    
+    # Bad: Missing type hints break schema generation  
+    @tool
+    def bad_tool(x, y):  # Will fail!
+        return f"{y}: {x}"
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    Return error messages as strings rather than raising exceptions, allowing the agent to recover:
+    
+    ```python
+    @tool
+    def resilient_api_call(endpoint: str) -> str:
+        """Make API call with error handling."""
+        try:
+            response = requests.get(endpoint, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.Timeout:
+            return "Error: API request timed out. Please try again."
+        except requests.HTTPError as e:
+            return f"Error: API returned {e.response.status_code}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    ```
+  </Accordion>
+  
+  <Accordion title="Implement Async for I/O">
+    Always implement async versions for network requests, database queries, and file I/O:
+    
+    ```python
+    @tool
+    async def fetch_multiple_urls(urls: list[str]) -> str:
+        """Fetch multiple URLs concurrently."""
+        async with aiohttp.ClientSession() as session:
+            tasks = [fetch_one(session, url) for url in urls]
+            results = await asyncio.gather(*tasks)
+            return json.dumps(results)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tool Testing
+
+Test tools independently before integrating with agents:
+
+```python
+import pytest
+from langchain_core.tools import tool
+
+@tool
+def add_numbers(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+def test_tool_execution():
+    # Direct invocation
+    result = add_numbers.invoke({"a": 5, "b": 3})
+    assert result == 8
+
+def test_tool_schema():
+    # Verify schema generation
+    schema = add_numbers.args_schema.model_json_schema()
+    assert "a" in schema["properties"]
+    assert schema["properties"]["a"]["type"] == "integer"
+
+@pytest.mark.asyncio
+async def test_async_tool():
+    # Test async tools
+    result = await add_numbers.ainvoke({"a": 10, "b": 20})
+    assert result == 30
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Middleware System" icon="layer-group" href="/advanced/middleware">
+    Intercept and modify tool execution with middleware
+  </Card>
+  
+  <Card title="Rate Limiting" icon="gauge" href="/advanced/rate-limiting">
+    Control tool execution frequency and manage API quotas
+  </Card>
+  
+  <Card title="Performance" icon="bolt" href="/advanced/performance">
+    Optimize tool performance and reduce latency
+  </Card>
+</CardGroup>

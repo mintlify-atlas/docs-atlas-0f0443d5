@@ -1,0 +1,144 @@
+---
+title: "HuggingFace Embeddings"
+description: "Embed text using HuggingFace sentence-transformers models"
+icon: "face-smile"
+---
+
+The `HuggingFaceEmbeddings` class provides integration with HuggingFace's sentence-transformers library for local embedding generation.
+
+## Installation
+
+```bash
+pip install langchain-huggingface
+pip install sentence-transformers
+```
+
+## Usage
+
+### Basic usage
+
+```python
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embed = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2"
+)
+```
+
+### Embed single text
+
+```python
+text = "The meaning of life is 42"
+vector = embed.embed_query(text)
+print(len(vector))
+```
+
+### Embed multiple texts
+
+```python
+texts = ["hello world", "goodbye world"]
+vectors = embed.embed_documents(texts)
+print(len(vectors))
+print(len(vectors[0]))
+```
+
+## Configuration
+
+### Supported models
+
+Any sentence-transformers model from HuggingFace Hub:
+
+- `sentence-transformers/all-mpnet-base-v2` - High quality, 768 dimensions
+- `sentence-transformers/all-MiniLM-L6-v2` - Fast and efficient, 384 dimensions
+- `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` - Multilingual support
+- `BAAI/bge-large-en-v1.5` - State-of-the-art English embeddings
+- `BAAI/bge-small-en-v1.5` - Smaller, faster alternative
+
+Browse all models at [HuggingFace Hub](https://huggingface.co/models?library=sentence-transformers).
+
+### Device selection
+
+Run embeddings on GPU:
+
+```python
+embed = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2",
+    model_kwargs={"device": "cuda"}
+)
+```
+
+Run on CPU:
+
+```python
+embed = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2",
+    model_kwargs={"device": "cpu"}
+)
+```
+
+### Advanced options
+
+```python
+embed = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2",
+    model_kwargs={
+        "device": "cuda",
+        "trust_remote_code": True
+    },
+    encode_kwargs={
+        "normalize_embeddings": True,
+        "batch_size": 32
+    },
+    show_progress=True
+)
+```
+
+### Multi-GPU processing
+
+Enable multi-GPU processing:
+
+```python
+embed = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2",
+    multi_process=True
+)
+```
+
+### Custom cache folder
+
+```python
+embed = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2",
+    cache_folder="/path/to/cache"
+)
+```
+
+## Parameters
+
+<ParamField path="model_name" type="string" default="sentence-transformers/all-mpnet-base-v2">
+  Name of the sentence-transformers model to use.
+</ParamField>
+
+<ParamField path="cache_folder" type="string" optional>
+  Path to store models. Can also be set by `SENTENCE_TRANSFORMERS_HOME` environment variable.
+</ParamField>
+
+<ParamField path="model_kwargs" type="object" default="{}">
+  Keyword arguments for the SentenceTransformer model, such as `device`, `trust_remote_code`, or `token`.
+</ParamField>
+
+<ParamField path="encode_kwargs" type="object" default="{}">
+  Keyword arguments for the `encode` method, such as `batch_size`, `normalize_embeddings`, or `precision`.
+</ParamField>
+
+<ParamField path="query_encode_kwargs" type="object" default="{}">
+  Separate keyword arguments for query encoding. Falls back to `encode_kwargs` if not provided.
+</ParamField>
+
+<ParamField path="multi_process" type="boolean" default="false">
+  Run encoding on multiple GPUs.
+</ParamField>
+
+<ParamField path="show_progress" type="boolean" default="false">
+  Whether to show a progress bar during embedding.
+</ParamField>

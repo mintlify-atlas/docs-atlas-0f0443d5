@@ -1,0 +1,115 @@
+---
+title: Groq
+---
+
+This integration connects Groq's ultra-fast inference API to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-groq
+```
+
+## Setup
+
+Set your Groq API key as an environment variable:
+
+```bash
+export GROQ_API_KEY="your-api-key"
+```
+
+Get your API key from [console.groq.com](https://console.groq.com).
+
+## Usage
+
+```python
+from langchain_groq import ChatGroq
+
+model = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    temperature=0,
+    max_retries=2,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatGroq
+
+<ParamField path="model" type="str" required>
+  Name of Groq model to use (e.g., `llama-3.3-70b-versatile`, `mixtral-8x7b-32768`).
+</ParamField>
+
+<ParamField path="temperature" type="float" default="1">
+  Sampling temperature between 0.0 and 1.0. Lower values make output more focused and deterministic.
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="reasoning_format" type="'parsed' | 'raw' | 'hidden' | None" default="None">
+  Format for reasoning output (for supported models):
+  - `parsed`: Separates reasoning into `additional_kwargs.reasoning_content`
+  - `raw`: Includes reasoning within think tags
+  - `hidden`: Returns only final answer (model still performs reasoning)
+</ParamField>
+
+<ParamField path="timeout" type="float | None" default="None">
+  Timeout for requests in seconds.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="2">
+  Maximum number of retries for failed requests.
+</ParamField>
+
+<ParamField path="api_key" type="str | None" default="None">
+  Groq API key. If not provided, reads from `GROQ_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="base_url" type="str | None" default="None">
+  Base URL for API requests. Leave blank unless using a proxy or service emulator.
+</ParamField>
+
+<ParamField path="model_kwargs" type="dict" default="{}">
+  Additional model parameters valid for the create call not explicitly specified.
+</ParamField>
+
+## Supported Models
+
+- **Llama 3.3 70B**: Meta's latest model with strong performance
+- **Llama 3.1 series**: 8B, 70B, and 405B variants
+- **Mixtral 8x7B**: Mixture-of-experts model
+- **Gemma 2 9B**: Google's efficient model
+- **DeepSeek-R1**: Reasoning model with extended thinking
+
+See [console.groq.com/docs/models](https://console.groq.com/docs/models) for the latest model availability.
+
+## Features
+
+- Ultra-fast inference with Groq's LPU technology
+- Function/tool calling
+- Vision support (select models)
+- JSON mode
+- Streaming
+- Async support
+- Reasoning mode for compatible models
+
+<Note>
+  Groq is known for extremely fast inference speeds, often 10x faster than traditional GPU inference. This makes it ideal for interactive applications and high-throughput workloads.
+</Note>

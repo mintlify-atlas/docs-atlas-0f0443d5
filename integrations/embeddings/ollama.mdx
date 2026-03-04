@@ -1,0 +1,208 @@
+---
+title: "Ollama Embeddings"
+description: "Embed text using locally-hosted Ollama models"
+icon: "server"
+---
+
+The `OllamaEmbeddings` class provides integration with locally-hosted Ollama models for privacy-focused, offline embedding generation.
+
+## Installation
+
+### Install Ollama
+
+First, install and set up Ollama on your system:
+
+```bash
+# Download from https://ollama.com
+# Or use package manager:
+brew install ollama  # macOS
+```
+
+### Pull an embedding model
+
+```bash
+ollama pull llama3
+```
+
+View available models at [Ollama Model Library](https://ollama.com/library).
+
+### Install LangChain integration
+
+```bash
+pip install langchain-ollama
+```
+
+## Usage
+
+### Start Ollama server
+
+```bash
+ollama serve
+```
+
+### Basic usage
+
+```python
+from langchain_ollama import OllamaEmbeddings
+
+embed = OllamaEmbeddings(
+    model="llama3"
+)
+```
+
+### Embed single text
+
+```python
+text = "The meaning of life is 42"
+vector = embed.embed_query(text)
+print(vector[:3])
+```
+
+```python
+[-0.024603435769677162, -0.007543657906353474, 0.0039630369283258915]
+```
+
+### Embed multiple texts
+
+```python
+texts = ["Document 1...", "Document 2..."]
+vectors = embed.embed_documents(texts)
+print(len(vectors))
+print(vectors[0][:3])
+```
+
+```python
+2
+[-0.024603435769677162, -0.007543657906353474, 0.0039630369283258915]
+```
+
+### Async usage
+
+```python
+vector = await embed.aembed_query(text)
+vectors = await embed.aembed_documents(texts)
+```
+
+## Configuration
+
+### Supported models
+
+Popular embedding models on Ollama:
+
+- `llama3` - Meta's Llama 3 model
+- `nomic-embed-text` - Nomic's text embedding model
+- `mxbai-embed-large` - MixedBread.ai's large embedding model
+- `all-minilm` - Sentence-transformers MiniLM model
+
+View and pull models:
+
+```bash
+# List pulled models
+ollama list
+
+# Pull a specific model
+ollama pull nomic-embed-text
+
+# Pull specific version
+ollama pull llama3:13b-v1.5-16k-q4_0
+```
+
+### Custom base URL
+
+Connect to Ollama running on a different host:
+
+```python
+embed = OllamaEmbeddings(
+    model="llama3",
+    base_url="http://192.168.1.100:11434"
+)
+```
+
+### Authentication
+
+For Ollama behind a proxy:
+
+```python
+embed = OllamaEmbeddings(
+    model="llama3",
+    base_url="http://username:password@localhost:11434"
+)
+```
+
+<Warning>
+  `userinfo` authentication is not secure and should only be used for local testing or in secure environments. Avoid using it in production or over unsecured networks.
+</Warning>
+
+### Model parameters
+
+Configure sampling and performance:
+
+```python
+embed = OllamaEmbeddings(
+    model="llama3",
+    temperature=0.8,
+    num_ctx=2048,  # Context window size
+    num_gpu=1,  # Number of GPUs to use
+    num_thread=8  # CPU threads for computation
+)
+```
+
+### Keep-alive
+
+Control how long the model stays loaded:
+
+```python
+embed = OllamaEmbeddings(
+    model="llama3",
+    keep_alive=300  # Keep loaded for 5 minutes
+)
+```
+
+### Validate model on init
+
+Check if model exists locally before using:
+
+```python
+embed = OllamaEmbeddings(
+    model="llama3",
+    validate_model_on_init=True
+)
+```
+
+## Parameters
+
+<ParamField path="model" type="string" required>
+  Name of the Ollama model to use.
+</ParamField>
+
+<ParamField path="base_url" type="string" optional>
+  Base URL where Ollama is hosted. Defaults to Ollama client default (usually `http://localhost:11434`).
+</ParamField>
+
+<ParamField path="validate_model_on_init" type="boolean" default="false">
+  Whether to validate the model exists in Ollama locally on initialization.
+</ParamField>
+
+<ParamField path="temperature" type="float" optional>
+  Sampling temperature. Higher values make output more creative.
+</ParamField>
+
+<ParamField path="num_ctx" type="integer" default="2048">
+  Size of the context window.
+</ParamField>
+
+<ParamField path="num_gpu" type="integer" optional>
+  Number of GPUs to use. Defaults to 1 on macOS (for Metal support), 0 to disable.
+</ParamField>
+
+<ParamField path="num_thread" type="integer" optional>
+  Number of threads for computation. Defaults to optimal performance based on system.
+</ParamField>
+
+<ParamField path="keep_alive" type="integer" optional>
+  How long (in seconds) the model stays loaded in memory. Defaults to 300 seconds (5 minutes).
+</ParamField>
+
+<ParamField path="client_kwargs" type="object" default="{}">
+  Additional kwargs to pass to httpx client (e.g., headers).
+</ParamField>

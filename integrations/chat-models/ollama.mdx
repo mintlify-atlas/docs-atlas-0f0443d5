@@ -1,0 +1,125 @@
+---
+title: Ollama
+---
+
+This integration connects Ollama's local models to LangChain.
+
+## Installation
+
+First, install Ollama from [ollama.com](https://ollama.com) and pull a model:
+
+```bash
+ollama pull llama3.2
+```
+
+Then install the LangChain integration:
+
+```bash
+pip install -U langchain-ollama
+```
+
+## Usage
+
+```python
+from langchain_ollama import ChatOllama
+
+model = ChatOllama(
+    model="llama3.2",
+    temperature=0.8,
+    num_predict=256,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatOllama
+
+<ParamField path="model" type="str" required>
+  Name of Ollama model to use (e.g., `llama3.2`, `mistral`, `phi3`).
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.8">
+  Sampling temperature between 0.0 and 1.0. Higher values make output more random.
+</ParamField>
+
+<ParamField path="num_predict" type="int | None" default="None">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="reasoning" type="bool | None" default="None">
+  Controls reasoning/thinking mode for supported models:
+  - `True`: Enables reasoning mode. Reasoning is captured in `additional_kwargs.reasoning_content`
+  - `False`: Disables reasoning mode
+  - `None`: Uses model's default behavior
+</ParamField>
+
+<ParamField path="base_url" type="str" default="http://localhost:11434">
+  Base URL where Ollama is running.
+</ParamField>
+
+<ParamField path="top_k" type="int | None" default="None">
+  Reduces probability of generating nonsense. Higher values give more diversity.
+</ParamField>
+
+<ParamField path="top_p" type="float | None" default="None">
+  Works together with top_k. Higher values give more diversity.
+</ParamField>
+
+<ParamField path="num_ctx" type="int | None" default="None">
+  Sets the size of the context window used to generate the next token.
+</ParamField>
+
+<ParamField path="repeat_penalty" type="float | None" default="None">
+  Sets how strongly to penalize repetitions. Higher values make repetitions less likely.
+</ParamField>
+
+<ParamField path="validate_model_on_init" type="bool" default="False">
+  Whether to validate that the model exists when initializing.
+</ParamField>
+
+<ParamField path="stop" type="list[str] | None" default="None">
+  Stop sequences to end generation.
+</ParamField>
+
+## Supported Models
+
+Ollama supports hundreds of models. Popular options include:
+
+- **Llama 3.2**: Fast, efficient model from Meta
+- **Mistral**: High-quality open model
+- **Phi-3**: Microsoft's small language model
+- **Gemma**: Google's open model
+- **DeepSeek**: Reasoning-capable models
+- **Qwen**: Alibaba's multilingual models
+
+Visit [ollama.com/library](https://ollama.com/library) for the full model catalog.
+
+## Features
+
+- Run models locally without API keys
+- Full privacy - no data sent to external servers
+- Tool calling (select models)
+- Vision capabilities (multimodal models)
+- Streaming
+- Async support
+- Custom model parameters
+- Reasoning mode for supported models
+
+<Note>
+  Ollama runs models locally on your machine. Performance depends on your hardware. GPU acceleration is recommended for larger models.
+</Note>

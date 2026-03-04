@@ -1,0 +1,304 @@
+---
+title: Building Agents
+description: Learn how to build agents that can use tools and make decisions
+---
+
+Agents use language models to choose a sequence of actions to take. Unlike chains where the sequence is hardcoded, agents use an LLM to determine which actions to take and in what order.
+
+## What is an Agent?
+
+An agent consists of three main components:
+
+1. **Agent Core**: Uses an LLM to decide which action to take
+2. **Tools**: Functions the agent can call to interact with external systems
+3. **AgentExecutor**: Orchestrates the agent loop (optional, or use LangGraph)
+
+<Note>
+For production agents with complex workflows, consider using [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) instead of the legacy AgentExecutor. LangGraph provides better control, state management, and human-in-the-loop capabilities.
+</Note>
+
+## Creating Tools
+
+Tools are functions that agents can call. Define tools using the `@tool` decorator or by subclassing `BaseTool`.
+
+### Using the @tool Decorator
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def search(query: str) -> str:
+    """Search for information about a topic.
+    
+    Args:
+        query: The search query to look up.
+    """
+    # Implementation here
+    return f"Results for: {query}"
+
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate a mathematical expression.
+    
+    Args:
+        expression: The mathematical expression to evaluate.
+    """
+    try:
+        result = eval(expression)
+        return str(result)
+    except Exception as e:
+        return f"Error: {e}"
+```
+
+### Structured Tool with Pydantic
+
+For tools with complex inputs, use Pydantic models:
+
+```python
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel, Field
+
+class EmailInput(BaseModel):
+    recipient: str = Field(description="Email address of the recipient")
+    subject: str = Field(description="Email subject line")
+    body: str = Field(description="Email body content")
+
+def send_email(recipient: str, subject: str, body: str) -> str:
+    """Send an email to a recipient."""
+    # Implementation
+    return f"Email sent to {recipient}"
+
+email_tool = StructuredTool(
+    name="send_email",
+    description="Send an email to a specified recipient",
+    func=send_email,
+    args_schema=EmailInput,
+)
+```
+
+## Building an Agent with bind_tools
+
+Bind tools to a chat model to enable tool calling:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.tools import tool
+
+@tool
+def get_weather(location: str) -> str:
+    """Get the current weather for a location.
+    
+    Args:
+        location: City name or location to get weather for.
+    """
+    # Mock implementation
+    return f"Sunny, 72°F in {location}"
+
+@tool  
+def search_web(query: str) -> str:
+    """Search the web for information.
+    
+    Args:
+        query: Search query.
+    """
+    return f"Search results for: {query}"
+
+# Create model with tools
+model = ChatOpenAI(model="gpt-4")
+model_with_tools = model.bind_tools([get_weather, search_web])
+
+# Invoke the model
+response = model_with_tools.invoke([
+    HumanMessage(content="What's the weather in San Francisco?")
+])
+
+print(response.tool_calls)
+# [{'name': 'get_weather', 'args': {'location': 'San Francisco'}, 'id': '...'}]
+```
+
+## Executing Tool Calls
+
+Handle tool calls in a loop:
+
+```python
+from langchain_core.messages import ToolMessage
+
+def run_agent(user_input: str, tools: list, max_iterations: int = 5):
+    messages = [HumanMessage(content=user_input)]
+    
+    for i in range(max_iterations):
+        # Get model response
+        response = model_with_tools.invoke(messages)
+        messages.append(response)
+        
+        # Check if there are tool calls
+        if not response.tool_calls:
+            # No more tools to call, return final answer
+            return response.content
+        
+        # Execute each tool call
+        for tool_call in response.tool_calls:
+            # Find the matching tool
+            tool_map = {t.name: t for t in tools}
+            tool = tool_map[tool_call["name"]]
+            
+            # Execute the tool
+            result = tool.invoke(tool_call["args"])
+            
+            # Add tool result to messages
+            messages.append(
+                ToolMessage(
+                    content=str(result),
+                    tool_call_id=tool_call["id"],
+                )
+            )
+    
+    return "Max iterations reached"
+
+# Run the agent
+tools = [get_weather, search_web]
+result = run_agent(
+    "What's the weather in NYC and find recent news about AI?",
+    tools
+)
+print(result)
+```
+
+## Agent Action Schema
+
+LangChain defines schemas for agent actions and observations:
+
+<CodeGroup>
+```python AgentAction
+from langchain_core.agents import AgentAction, AgentFinish
+
+# Represents a tool invocation request
+action = AgentAction(
+    tool="search",
+    tool_input="latest AI news",
+    log="I need to search for AI news"
+)
+```
+
+```python AgentFinish
+# Represents the final agent output
+finish = AgentFinish(
+    return_values={"output": "Here are the latest AI developments..."},
+    log="I have gathered all necessary information"
+)
+```
+</CodeGroup>
+
+## Creating a Retriever Tool
+
+Combine agents with retrievers for RAG-based agents:
+
+```python
+from langchain_core.tools import create_retriever_tool
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
+
+# Create a vector store with documents
+docs = [
+    Document(
+        page_content="LangChain is a framework for building LLM applications.",
+        metadata={"source": "docs"}
+    ),
+    Document(
+        page_content="Agents can use tools to interact with external systems.",
+        metadata={"source": "docs"}
+    ),
+]
+
+vectorstore = InMemoryVectorStore.from_documents(
+    docs,
+    embedding=OpenAIEmbeddings()
+)
+
+# Create retriever
+retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+
+# Create retriever tool
+retriever_tool = create_retriever_tool(
+    retriever,
+    name="langchain_docs",
+    description="Search LangChain documentation for information about the framework",
+)
+
+# Use with agent
+model_with_retriever = model.bind_tools([retriever_tool])
+```
+
+## Async Agent Execution
+
+All agent components support async execution:
+
+```python
+import asyncio
+
+async def run_agent_async(user_input: str, tools: list):
+    messages = [HumanMessage(content=user_input)]
+    
+    for i in range(5):
+        # Async model invocation
+        response = await model_with_tools.ainvoke(messages)
+        messages.append(response)
+        
+        if not response.tool_calls:
+            return response.content
+        
+        # Execute tools in parallel
+        tool_map = {t.name: t for t in tools}
+        tasks = []
+        
+        for tool_call in response.tool_calls:
+            tool = tool_map[tool_call["name"]]
+            tasks.append(tool.ainvoke(tool_call["args"]))
+        
+        results = await asyncio.gather(*tasks)
+        
+        for tool_call, result in zip(response.tool_calls, results):
+            messages.append(
+                ToolMessage(
+                    content=str(result),
+                    tool_call_id=tool_call["id"],
+                )
+            )
+    
+    return "Max iterations reached"
+
+# Run async agent
+result = await run_agent_async("Research LangChain features", tools)
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Clear tool descriptions">
+    Write descriptive docstrings for tools. The LLM uses these to decide when to call each tool.
+  </Step>
+  
+  <Step title="Limit iterations">
+    Set a maximum number of iterations to prevent infinite loops.
+  </Step>
+  
+  <Step title="Handle errors">
+    Wrap tool execution in try-except blocks and return error messages to the agent.
+  </Step>
+  
+  <Step title="Use LangGraph for production">
+    For complex agents, use [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) instead of manual loops.
+  </Step>
+</Steps>
+
+<Warning>
+The legacy `AgentExecutor` is provided for backwards compatibility. New agents should be built using the `bind_tools()` pattern shown above or [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) for more control.
+</Warning>
+
+## Next Steps
+
+- Learn about [Retrieval](/guides/retrieval) for RAG-based agents
+- Explore [Streaming](/guides/streaming) for real-time agent responses
+- Check out [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) for production agent workflows

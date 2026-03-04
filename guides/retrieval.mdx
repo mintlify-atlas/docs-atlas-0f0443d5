@@ -1,0 +1,515 @@
+---
+title: Retrieval (RAG)
+description: Build retrieval-augmented generation systems with LangChain
+---
+
+Retrieval-Augmented Generation (RAG) combines document retrieval with LLMs to answer questions using external knowledge. This is essential for building applications that need to reference specific documents, databases, or knowledge bases.
+
+## What is RAG?
+
+RAG works in three steps:
+
+1. **Index**: Embed documents and store them in a vector database
+2. **Retrieve**: Find relevant documents based on a query
+3. **Generate**: Use retrieved context to generate an answer
+
+```python
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
+
+# 1. Index documents
+docs = [
+    Document(
+        page_content="LangChain is a framework for building LLM applications."
+    ),
+    Document(
+        page_content="RAG combines retrieval with generation for better answers."
+    ),
+]
+
+vectorstore = InMemoryVectorStore.from_documents(
+    docs, embedding=OpenAIEmbeddings()
+)
+
+# 2. Retrieve relevant documents
+retriever = vectorstore.as_retriever()
+relevant_docs = retriever.invoke("What is LangChain?")
+
+# 3. Generate answer with context
+model = ChatOpenAI(model="gpt-4")
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Answer using this context: {context}"),
+    ("human", "{question}")
+])
+
+context = "\n".join([doc.page_content for doc in relevant_docs])
+response = model.invoke(
+    prompt.format_messages(context=context, question="What is LangChain?")
+)
+print(response.content)
+```
+
+## Building a Retriever
+
+Retrievers implement the interface for finding relevant documents:
+
+### From Vector Store
+
+The most common pattern is creating a retriever from a vector store:
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
+
+# Create vector store
+documents = [
+    Document(
+        page_content="LangChain simplifies LLM development",
+        metadata={"source": "intro", "page": 1}
+    ),
+    Document(
+        page_content="Embeddings enable semantic search",
+        metadata={"source": "intro", "page": 2}
+    ),
+]
+
+vectorstore = InMemoryVectorStore.from_documents(
+    documents,
+    embedding=OpenAIEmbeddings()
+)
+
+# Create retriever with configuration
+retriever = vectorstore.as_retriever(
+    search_type="similarity",      # or "mmr", "similarity_score_threshold"
+    search_kwargs={"k": 3}          # Return top 3 results
+)
+
+# Use the retriever
+results = retriever.invoke("How does LangChain help?")
+for doc in results:
+    print(doc.page_content)
+```
+
+### Search Types
+
+<Tabs>
+  <Tab title="Similarity">
+    Default search - returns most similar documents:
+    ```python
+    retriever = vectorstore.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 4}  # Top 4 results
+    )
+    ```
+  </Tab>
+  
+  <Tab title="MMR (Maximal Marginal Relevance)">
+    Balances relevance with diversity:
+    ```python
+    retriever = vectorstore.as_retriever(
+        search_type="mmr",
+        search_kwargs={
+            "k": 4,
+            "fetch_k": 20,      # Fetch 20 candidates
+            "lambda_mult": 0.5  # 0=max diversity, 1=max relevance
+        }
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Similarity with Threshold">
+    Only return results above a score threshold:
+    ```python
+    retriever = vectorstore.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={
+            "score_threshold": 0.8,  # Minimum similarity score
+            "k": 4
+        }
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Custom Retriever
+
+Implement custom retrieval logic:
+
+```python
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
+
+class CustomRetriever(BaseRetriever):
+    """Custom retriever that filters by metadata."""
+    
+    documents: list[Document]
+    k: int = 3
+    
+    def _get_relevant_documents(
+        self, 
+        query: str,
+        *,
+        run_manager: CallbackManagerForRetrieverRun
+    ) -> list[Document]:
+        """Retrieve documents based on custom logic."""
+        # Custom retrieval logic
+        filtered = [
+            doc for doc in self.documents
+            if query.lower() in doc.page_content.lower()
+        ]
+        return filtered[:self.k]
+    
+    async def _aget_relevant_documents(
+        self, 
+        query: str,
+        *,
+        run_manager: CallbackManagerForRetrieverRun
+    ) -> list[Document]:
+        """Async retrieval."""
+        return self._get_relevant_documents(query, run_manager=run_manager)
+
+# Use custom retriever
+retriever = CustomRetriever(
+    documents=documents,
+    k=2
+)
+
+results = retriever.invoke("LangChain")
+```
+
+## RAG Chain with LCEL
+
+Use LangChain Expression Language to build RAG chains:
+
+```python
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+
+# Setup
+vectorstore = InMemoryVectorStore.from_texts(
+    [
+        "LangChain is a framework for LLM apps",
+        "RAG improves LLM answers with context",
+        "Vector stores enable semantic search"
+    ],
+    embedding=OpenAIEmbeddings()
+)
+
+retriever = vectorstore.as_retriever()
+
+# Create RAG prompt
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Use the following context to answer the question:\n\n{context}"),
+    ("human", "{question}")
+])
+
+model = ChatOpenAI(model="gpt-4")
+
+# Build RAG chain
+rag_chain = (
+    {
+        "context": retriever | (lambda docs: "\n\n".join([d.page_content for d in docs])),
+        "question": RunnablePassthrough()
+    }
+    | prompt
+    | model
+    | StrOutputParser()
+)
+
+# Use the chain
+answer = rag_chain.invoke("What is RAG?")
+print(answer)
+```
+
+## Multi-Query Retrieval
+
+Generate multiple search queries for better recall:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+def multi_query_retriever(question: str, retriever, model):
+    """Generate multiple queries and retrieve from all."""
+    
+    # Generate alternative queries
+    query_prompt = ChatPromptTemplate.from_messages([
+        ("system", "Generate 3 alternative search queries for: {question}"),
+        ("human", "Provide only the queries, one per line.")
+    ])
+    
+    query_chain = query_prompt | model | StrOutputParser()
+    alternative_queries = query_chain.invoke({"question": question})
+    queries = [question] + alternative_queries.strip().split("\n")
+    
+    # Retrieve for each query
+    all_docs = []
+    seen_content = set()
+    
+    for query in queries:
+        docs = retriever.invoke(query)
+        for doc in docs:
+            if doc.page_content not in seen_content:
+                all_docs.append(doc)
+                seen_content.add(doc.page_content)
+    
+    return all_docs
+
+# Use multi-query retrieval
+model = ChatOpenAI(model="gpt-4")
+docs = multi_query_retriever(
+    "How to use embeddings?",
+    retriever,
+    model
+)
+```
+
+## Contextual Compression
+
+Compress retrieved documents to keep only relevant parts:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+def compress_documents(docs: list[Document], query: str, model) -> list[Document]:
+    """Extract only relevant parts from documents."""
+    
+    compression_prompt = ChatPromptTemplate.from_messages([
+        ("system", "Extract only the parts relevant to: {query}"),
+        ("human", "Document: {document}")
+    ])
+    
+    compressed = []
+    for doc in docs:
+        result = model.invoke(
+            compression_prompt.format_messages(
+                query=query,
+                document=doc.page_content
+            )
+        )
+        compressed.append(
+            Document(
+                page_content=result.content,
+                metadata=doc.metadata
+            )
+        )
+    
+    return compressed
+
+# Use compression
+model = ChatOpenAI(model="gpt-4")
+raw_docs = retriever.invoke("What is LangChain?")
+compressed_docs = compress_documents(raw_docs, "What is LangChain?", model)
+```
+
+## Metadata Filtering
+
+Filter retrieval by metadata:
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
+
+# Documents with rich metadata
+docs = [
+    Document(
+        page_content="Python guide content",
+        metadata={"language": "python", "category": "tutorial", "level": "beginner"}
+    ),
+    Document(
+        page_content="JavaScript guide content",
+        metadata={"language": "javascript", "category": "tutorial", "level": "beginner"}
+    ),
+    Document(
+        page_content="Python API reference",
+        metadata={"language": "python", "category": "reference", "level": "advanced"}
+    ),
+]
+
+vectorstore = InMemoryVectorStore.from_documents(
+    docs,
+    embedding=OpenAIEmbeddings()
+)
+
+# Retrieve with metadata filter
+retriever = vectorstore.as_retriever(
+    search_kwargs={
+        "k": 5,
+        "filter": {"language": "python", "level": "beginner"}
+    }
+)
+
+results = retriever.invoke("programming tutorial")
+```
+
+## Parent Document Retrieval
+
+Retrieve small chunks but return full parent documents:
+
+```python
+from langchain_core.documents import Document
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+
+# Parent documents
+parent_docs = [
+    Document(
+        page_content="Full document content here... (very long)",
+        metadata={"doc_id": "doc1"}
+    ),
+]
+
+# Create smaller chunks for retrieval
+chunks = [
+    Document(
+        page_content="Chunk 1 from doc1",
+        metadata={"doc_id": "doc1", "chunk_id": 0}
+    ),
+    Document(
+        page_content="Chunk 2 from doc1",
+        metadata={"doc_id": "doc1", "chunk_id": 1}
+    ),
+]
+
+# Index chunks
+vectorstore = InMemoryVectorStore.from_documents(
+    chunks,
+    embedding=OpenAIEmbeddings()
+)
+
+# Retrieve chunks, return parents
+def retrieve_parent_docs(query: str):
+    # Find relevant chunks
+    chunk_results = vectorstore.similarity_search(query, k=2)
+    
+    # Map back to parent documents
+    parent_ids = set(doc.metadata["doc_id"] for doc in chunk_results)
+    parent_map = {doc.metadata["doc_id"]: doc for doc in parent_docs}
+    
+    return [parent_map[pid] for pid in parent_ids]
+
+results = retrieve_parent_docs("specific topic")
+```
+
+## Async Retrieval
+
+Use async for parallel retrieval:
+
+```python
+import asyncio
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+
+vectorstore = InMemoryVectorStore.from_texts(
+    ["Doc 1", "Doc 2", "Doc 3"],
+    embedding=OpenAIEmbeddings()
+)
+
+retriever = vectorstore.as_retriever()
+
+async def retrieve_multiple_queries(queries: list[str]):
+    """Retrieve for multiple queries in parallel."""
+    tasks = [retriever.ainvoke(query) for query in queries]
+    results = await asyncio.gather(*tasks)
+    return results
+
+# Run async retrieval
+queries = ["query 1", "query 2", "query 3"]
+results = await retrieve_multiple_queries(queries)
+
+for query, docs in zip(queries, results):
+    print(f"\n{query}: {len(docs)} results")
+```
+
+## Hybrid Search
+
+Combine semantic and keyword search:
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_core.documents import Document
+
+def hybrid_search(query: str, vectorstore, documents: list[Document], k: int = 3):
+    """Combine vector similarity with keyword matching."""
+    
+    # Semantic search
+    semantic_results = vectorstore.similarity_search(query, k=k*2)
+    
+    # Keyword search (simple implementation)
+    query_terms = set(query.lower().split())
+    keyword_results = []
+    
+    for doc in documents:
+        doc_terms = set(doc.page_content.lower().split())
+        overlap = len(query_terms & doc_terms)
+        if overlap > 0:
+            keyword_results.append((overlap, doc))
+    
+    keyword_results.sort(reverse=True, key=lambda x: x[0])
+    keyword_docs = [doc for _, doc in keyword_results[:k*2]]
+    
+    # Combine and deduplicate
+    seen = set()
+    combined = []
+    
+    for doc in semantic_results + keyword_docs:
+        if doc.page_content not in seen:
+            combined.append(doc)
+            seen.add(doc.page_content)
+            if len(combined) >= k:
+                break
+    
+    return combined
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Chunk documents appropriately">
+    Chunk size affects retrieval quality. Test 500-1000 characters with 100-200 character overlap.
+  </Step>
+  
+  <Step title="Use metadata for filtering">
+    Add metadata (source, date, category) to enable filtered searches.
+  </Step>
+  
+  <Step title="Optimize retrieval parameters">
+    Tune `k` (number of results) and search type based on your use case.
+  </Step>
+  
+  <Step title="Consider multi-query retrieval">
+    Generate alternative queries to improve recall for complex questions.
+  </Step>
+  
+  <Step title="Monitor retrieval quality">
+    Log retrieved documents to identify and fix retrieval issues.
+  </Step>
+  
+  <Step title="Use reranking">
+    For critical applications, rerank retrieved documents before generation.
+  </Step>
+</Steps>
+
+## Common Patterns
+
+- **Question Answering**: Retrieve docs and generate answers
+- **Chatbots**: Add conversation history to retrieval context
+- **Summarization**: Retrieve related docs before summarizing
+- **Citation**: Return source documents with generated answers
+
+## Next Steps
+
+- Learn about [Embeddings](/guides/embeddings) for vector search
+- Explore [Chat Models](/guides/chat-models) for generation
+- Check out [Vector Store integrations](/integrations/vectorstores)
+- Build production RAG with [LangSmith](https://docs.langchain.com/langsmith)

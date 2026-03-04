@@ -1,0 +1,131 @@
+---
+title: Anthropic
+---
+
+This integration connects Anthropic's Claude models to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-anthropic
+```
+
+## Setup
+
+Set your Anthropic API key as an environment variable:
+
+```bash
+export ANTHROPIC_API_KEY="your-api-key"
+```
+
+## Usage
+
+```python
+from langchain_anthropic import ChatAnthropic
+
+model = ChatAnthropic(
+    model="claude-sonnet-4-5-20250929",
+    temperature=0,
+    max_tokens=1024,
+    timeout=None,
+    max_retries=2,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatAnthropic
+
+<ParamField path="model" type="str" required>
+  Model name to use (e.g., `claude-sonnet-4-5-20250929`, `claude-opus-4-6-20250929`).
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate. If not specified, uses the model's `max_output_tokens` from its profile.
+</ParamField>
+
+<ParamField path="temperature" type="float | None" default="None">
+  Sampling temperature. A non-negative float that controls randomness in generation.
+</ParamField>
+
+<ParamField path="top_k" type="int | None" default="None">
+  Number of most likely tokens to consider at each step.
+</ParamField>
+
+<ParamField path="top_p" type="float | None" default="None">
+  Total probability mass of tokens to consider at each step (nucleus sampling).
+</ParamField>
+
+<ParamField path="timeout" type="float | None" default="None">
+  Timeout for requests to Claude API in seconds.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="2">
+  Number of retries allowed for requests sent to the Claude API.
+</ParamField>
+
+<ParamField path="stop_sequences" type="list[str] | None" default="None">
+  Custom stop sequences to end generation.
+</ParamField>
+
+<ParamField path="api_key" type="SecretStr" default="from env">
+  Anthropic API key. Automatically read from `ANTHROPIC_API_KEY` environment variable if not provided.
+</ParamField>
+
+<ParamField path="base_url" type="str" default="https://api.anthropic.com">
+  Base URL for API requests. Only specify if using a proxy or service emulator. Reads from `ANTHROPIC_API_URL` or `ANTHROPIC_BASE_URL` if not provided.
+</ParamField>
+
+<ParamField path="betas" type="list[str] | None" default="None">
+  List of beta features to enable (e.g., `["token-efficient-tools-2025-02-19"]`).
+</ParamField>
+
+<ParamField path="thinking" type="dict | None" default="None">
+  Parameters for Claude reasoning. For Claude Opus 4.5, use `{"type": "enabled", "budget_tokens": 10_000}`. For Claude Opus 4.6, use `{"type": "adaptive"}`.
+</ParamField>
+
+<ParamField path="effort" type="'max' | 'high' | 'medium' | 'low' | None" default="None">
+  Control how many tokens Claude uses when responding. Available on Claude Opus 4.6 and 4.5. The `max` effort level is only supported by Claude Opus 4.6.
+</ParamField>
+
+<ParamField path="streaming" type="bool" default="False">
+  Whether to use streaming or not.
+</ParamField>
+
+<ParamField path="stream_usage" type="bool" default="True">
+  Whether to include usage metadata in streaming output.
+</ParamField>
+
+## Supported Models
+
+- **Claude Opus 4.6**: Most capable model with advanced reasoning
+- **Claude Sonnet 4.5**: Balanced performance and speed
+- **Claude Haiku 4**: Fast, cost-effective model
+
+See the [Claude Platform docs](https://platform.claude.com/docs/en/about-claude/models/overview) for the latest models and pricing.
+
+## Features
+
+- Text generation
+- Tool calling
+- Vision (multimodal input)
+- Streaming
+- Async support
+- Prompt caching
+- Extended thinking/reasoning mode
+- Built-in tools (computer use, bash, web search, etc.)

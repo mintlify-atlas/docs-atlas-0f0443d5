@@ -1,0 +1,445 @@
+---
+title: Prompt Templates
+description: Template classes for creating dynamic prompts
+---
+
+## Overview
+
+Prompt templates allow you to create reusable prompts with variable substitution. LangChain provides templates for both string-based prompts and chat-based prompts.
+
+## BasePromptTemplate
+
+Base class for all prompt templates.
+
+**Source:** `langchain_core.prompts.base:39`
+
+**Inherits:** `RunnableSerializable[dict, PromptValue]`
+
+### Type Parameters
+
+<ParamField path="FormatOutputType" type="TypeVar">
+  The output type when formatting the prompt
+</ParamField>
+
+### Properties
+
+<ResponseField name="input_variables" type="list[str]" required>
+  List of variable names required as inputs to the prompt
+</ResponseField>
+
+<ResponseField name="optional_variables" type="list[str]" default="[]">
+  List of optional variable names (auto-inferred from placeholders)
+</ResponseField>
+
+<ResponseField name="input_types" type="dict[str, Any]" default="{}">
+  Dictionary mapping variable names to their expected types. Defaults to `str` for all.
+</ResponseField>
+
+<ResponseField name="output_parser" type="BaseOutputParser | None" default="None">
+  Optional output parser to apply to the LLM response
+</ResponseField>
+
+<ResponseField name="partial_variables" type="Mapping[str, Any]" default="{}">
+  Partial variables that are pre-filled
+</ResponseField>
+
+<ResponseField name="metadata" type="dict[str, Any] | None" default="None">
+  Metadata for tracing
+</ResponseField>
+
+<ResponseField name="tags" type="list[str] | None" default="None">
+  Tags for tracing
+</ResponseField>
+
+### Methods
+
+#### invoke
+
+```python
+def invoke(
+    self,
+    input: dict,
+    config: RunnableConfig | None = None
+) -> PromptValue
+```
+
+Format the prompt with input variables.
+
+<ParamField path="input" type="dict" required>
+  Dictionary of variable values
+</ParamField>
+
+<ResponseField name="return" type="PromptValue">
+  Formatted prompt value
+</ResponseField>
+
+#### format_prompt
+
+```python
+def format_prompt(self, **kwargs: Any) -> PromptValue
+```
+
+Format the prompt with keyword arguments.
+
+#### partial
+
+```python
+def partial(self, **kwargs: Any) -> BasePromptTemplate
+```
+
+Return a partial prompt template with some variables pre-filled.
+
+<ParamField path="**kwargs" type="Any" required>
+  Variables to pre-fill
+</ParamField>
+
+<ResponseField name="return" type="BasePromptTemplate">
+  New prompt template with partial variables
+</ResponseField>
+
+## PromptTemplate
+
+String prompt template using Python's `str.format` syntax.
+
+**Source:** `langchain_core.prompts.prompt`
+
+**Inherits:** `BasePromptTemplate`
+
+### Properties
+
+<ResponseField name="template" type="str" required>
+  The template string with `{variable}` placeholders
+</ResponseField>
+
+<ResponseField name="template_format" type="Literal['f-string', 'jinja2', 'mustache']" default="'f-string'">
+  Format of the template string
+</ResponseField>
+
+<ResponseField name="validate_template" type="bool" default="False">
+  Whether to validate the template on initialization
+</ResponseField>
+
+### Constructor
+
+```python
+@classmethod
+def from_template(
+    cls,
+    template: str,
+    *,
+    template_format: str = "f-string",
+    partial_variables: dict[str, Any] | None = None,
+    **kwargs: Any
+) -> PromptTemplate
+```
+
+Create a prompt template from a template string.
+
+<ParamField path="template" type="str" required>
+  Template string with variables in `{variable}` format
+</ParamField>
+
+<ParamField path="template_format" type="str" default="'f-string'">
+  Template format (`'f-string'`, `'jinja2'`, or `'mustache'`)
+</ParamField>
+
+<ParamField path="partial_variables" type="dict | None">
+  Variables to pre-fill
+</ParamField>
+
+### Example
+
+```python
+from langchain_core.prompts import PromptTemplate
+
+prompt = PromptTemplate.from_template(
+    "Tell me a joke about {topic}"
+)
+prompt.invoke({"topic": "cats"})  # PromptValue
+prompt.format(topic="dogs")  # "Tell me a joke about dogs"
+```
+
+## ChatPromptTemplate
+
+Template for chat-based prompts using messages.
+
+**Source:** `langchain_core.prompts.chat`
+
+**Inherits:** `BasePromptTemplate`
+
+### Properties
+
+<ResponseField name="messages" type="list[MessageLike]" required>
+  List of message templates or placeholders
+</ResponseField>
+
+### Constructor
+
+```python
+@classmethod
+def from_messages(
+    cls,
+    messages: Sequence[MessageLike | tuple[str, str]]
+) -> ChatPromptTemplate
+```
+
+Create a chat prompt template from a list of messages.
+
+<ParamField path="messages" type="Sequence" required>
+  List of message templates. Each can be:
+  - A tuple like `("human", "Hello {name}")`
+  - A `BaseMessage` instance
+  - A `BaseMessagePromptTemplate`
+  - A `MessagesPlaceholder`
+</ParamField>
+
+### Example
+
+```python
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    MessagesPlaceholder("history"),
+    ("human", "{input}")
+])
+
+result = prompt.invoke({
+    "history": [("human", "Hi"), ("ai", "Hello!")],
+    "input": "What's the weather?"
+})
+```
+
+### Class Methods
+
+#### from_template
+
+```python
+@classmethod
+def from_template(
+    cls,
+    template: str,
+    *,
+    role: str = "human",
+    **kwargs: Any
+) -> ChatPromptTemplate
+```
+
+Create a chat prompt with a single message.
+
+<ParamField path="template" type="str" required>
+  Template string
+</ParamField>
+
+<ParamField path="role" type="str" default="'human'">
+  Role of the message (`'human'`, `'ai'`, `'system'`, etc.)
+</ParamField>
+
+## MessagesPlaceholder
+
+Placeholder for inserting a list of messages.
+
+**Source:** `langchain_core.prompts.chat:52`
+
+**Inherits:** `BaseMessagePromptTemplate`
+
+### Properties
+
+<ResponseField name="variable_name" type="str" required>
+  Name of the variable containing messages
+</ResponseField>
+
+<ResponseField name="optional" type="bool" default="False">
+  Whether the placeholder is optional. If `True`, returns empty list when variable not provided.
+</ResponseField>
+
+<ResponseField name="n_messages" type="PositiveInt | None" default="None">
+  Maximum number of messages to include. If `None`, includes all.
+</ResponseField>
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    variable_name: str,
+    *,
+    optional: bool = False,
+    **kwargs: Any
+)
+```
+
+<ParamField path="variable_name" type="str" required>
+  Name of variable containing messages
+</ParamField>
+
+<ParamField path="optional" type="bool" default="False">
+  Whether the variable is optional
+</ParamField>
+
+### Example
+
+```python
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{question}")
+])
+
+prompt.invoke({
+    "chat_history": [
+        ("human", "What's 2+2?"),
+        ("ai", "4")
+    ],
+    "question": "What's 3+3?"
+})
+```
+
+## HumanMessagePromptTemplate
+
+Template for creating human messages.
+
+**Source:** `langchain_core.prompts.message`
+
+**Inherits:** `BaseMessagePromptTemplate`
+
+### Properties
+
+<ResponseField name="prompt" type="StringPromptTemplate" required>
+  The underlying string prompt template
+</ResponseField>
+
+### Constructor
+
+```python
+@classmethod
+def from_template(
+    cls,
+    template: str,
+    *,
+    template_format: str = "f-string",
+    **kwargs: Any
+) -> HumanMessagePromptTemplate
+```
+
+## AIMessagePromptTemplate
+
+Template for creating AI messages.
+
+**Source:** `langchain_core.prompts.message`
+
+**Inherits:** `BaseMessagePromptTemplate`
+
+## SystemMessagePromptTemplate
+
+Template for creating system messages.
+
+**Source:** `langchain_core.prompts.message`
+
+**Inherits:** `BaseMessagePromptTemplate`
+
+## FewShotPromptTemplate
+
+Template for few-shot learning with examples.
+
+**Source:** `langchain_core.prompts.few_shot`
+
+**Inherits:** `BasePromptTemplate`
+
+### Properties
+
+<ResponseField name="examples" type="list[dict] | None">
+  List of example dictionaries
+</ResponseField>
+
+<ResponseField name="example_selector" type="BaseExampleSelector | None">
+  Selector to choose examples dynamically
+</ResponseField>
+
+<ResponseField name="example_prompt" type="PromptTemplate" required>
+  Template for formatting each example
+</ResponseField>
+
+<ResponseField name="suffix" type="str" required>
+  Suffix template appended after examples
+</ResponseField>
+
+<ResponseField name="prefix" type="str" default="''">
+  Prefix template prepended before examples
+</ResponseField>
+
+<ResponseField name="example_separator" type="str" default="'\\n\\n'">
+  String separator between examples
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.prompts import FewShotPromptTemplate, PromptTemplate
+
+example_prompt = PromptTemplate.from_template(
+    "Question: {question}\nAnswer: {answer}"
+)
+
+prompt = FewShotPromptTemplate(
+    examples=[
+        {"question": "What's 2+2?", "answer": "4"},
+        {"question": "What's 3+3?", "answer": "6"}
+    ],
+    example_prompt=example_prompt,
+    suffix="Question: {input}\nAnswer:",
+    input_variables=["input"]
+)
+
+prompt.format(input="What's 4+4?")
+```
+
+## PipelinePromptTemplate
+
+Compose multiple prompt templates in a pipeline.
+
+**Source:** `langchain_core.prompts.pipeline`
+
+**Inherits:** `BasePromptTemplate`
+
+### Properties
+
+<ResponseField name="final_prompt" type="BasePromptTemplate" required>
+  Final prompt template to format
+</ResponseField>
+
+<ResponseField name="pipeline_prompts" type="list[tuple[str, BasePromptTemplate]]" required>
+  List of `(name, prompt)` tuples to execute in order
+</ResponseField>
+
+## ImagePromptTemplate
+
+Template for creating prompts with images.
+
+**Source:** `langchain_core.prompts.image`
+
+**Inherits:** `BasePromptTemplate`
+
+### Properties
+
+<ResponseField name="template" type="str | dict" required>
+  Image URL template or image data template
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts.image import ImagePromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ("human", [
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image", "source": {"type": "url", "url": "{image_url}"}}
+    ])
+])
+
+prompt.invoke({"image_url": "https://example.com/image.jpg"})
+```

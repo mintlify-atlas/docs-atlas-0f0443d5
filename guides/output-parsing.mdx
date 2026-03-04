@@ -1,0 +1,467 @@
+---
+title: Output Parsing
+description: Extract structured data from LLM outputs
+---
+
+Output parsers convert raw LLM text into structured formats like JSON, Pydantic models, or custom types. This is essential for reliable data extraction and integration with downstream systems.
+
+## Why Use Output Parsers?
+
+LLMs generate unstructured text. Output parsers:
+- Extract structured data (JSON, objects, lists)
+- Validate outputs against schemas
+- Handle parsing errors gracefully
+- Provide format instructions to the LLM
+
+## String Output Parser
+
+The simplest parser extracts plain text:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+
+model = ChatOpenAI(model="gpt-4")
+parser = StrOutputParser()
+
+# Chain model with parser
+chain = model | parser
+
+result = chain.invoke("Tell me a joke")
+print(result)  # Plain string output
+print(type(result))  # <class 'str'>
+```
+
+<Note>
+`StrOutputParser` is the default parser. It extracts the `content` field from `AIMessage` objects.
+</Note>
+
+## JSON Output Parser
+
+Parse JSON from LLM outputs:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+
+model = ChatOpenAI(model="gpt-4")
+parser = JsonOutputParser()
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Extract person information as JSON with keys: name, age, occupation"),
+    ("human", "{text}")
+])
+
+chain = prompt | model | parser
+
+result = chain.invoke({
+    "text": "John Doe is a 35 year old software engineer at Acme Corp"
+})
+
+print(result)
+# {'name': 'John Doe', 'age': 35, 'occupation': 'Software Engineer'}
+
+print(type(result))  # <class 'dict'>
+```
+
+### With Format Instructions
+
+Guide the LLM with format instructions:
+
+```python
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+
+parser = JsonOutputParser()
+
+prompt = PromptTemplate(
+    template="Extract person info from: {text}\n{format_instructions}",
+    input_variables=["text"],
+    partial_variables={"format_instructions": parser.get_format_instructions()}
+)
+
+chain = prompt | model | parser
+
+result = chain.invoke({"text": "Alice is 28 and works as a designer"})
+print(result)
+```
+
+## Pydantic Output Parser
+
+Parse into strongly-typed Pydantic models:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
+
+# Define schema
+class Person(BaseModel):
+    """Information about a person."""
+    name: str = Field(description="Person's full name")
+    age: int = Field(description="Person's age in years")
+    email: str = Field(description="Email address")
+    occupation: str = Field(description="Job title or profession")
+
+# Create parser
+parser = PydanticOutputParser(pydantic_object=Person)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Extract person information.\n{format_instructions}"),
+    ("human", "{text}")
+])
+
+model = ChatOpenAI(model="gpt-4")
+chain = prompt | model | parser
+
+# Parse into Pydantic model
+result = chain.invoke({
+    "text": "Contact: Jane Smith, age 42, jane@example.com, Senior Architect",
+    "format_instructions": parser.get_format_instructions()
+})
+
+print(type(result))  # <class '__main__.Person'>
+print(result.name)   # "Jane Smith"
+print(result.age)    # 42
+print(result.model_dump())  # Convert to dict
+```
+
+### Nested Models
+
+Handle complex nested structures:
+
+```python
+from pydantic import BaseModel, Field
+from langchain_core.output_parsers import PydanticOutputParser
+
+class Address(BaseModel):
+    street: str
+    city: str
+    country: str
+
+class Company(BaseModel):
+    name: str
+    founded: int
+    address: Address
+    employee_count: int = Field(description="Number of employees")
+
+parser = PydanticOutputParser(pydantic_object=Company)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Extract company information as JSON.\n{format_instructions}"),
+    ("human", "{text}")
+])
+
+chain = prompt | model | parser
+
+result = chain.invoke({
+    "text": "Acme Corp was founded in 2010 at 123 Main St, San Francisco, USA with 500 employees",
+    "format_instructions": parser.get_format_instructions()
+})
+
+print(result.name)              # "Acme Corp"
+print(result.address.city)      # "San Francisco"
+print(result.employee_count)    # 500
+```
+
+## List Output Parser
+
+Parse comma-separated lists:
+
+```python
+from langchain_core.output_parsers import CommaSeparatedListOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+parser = CommaSeparatedListOutputParser()
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "List 5 programming languages.\n{format_instructions}"),
+    ("human", "Popular languages in 2024")
+])
+
+model = ChatOpenAI(model="gpt-4")
+chain = (
+    prompt.partial(format_instructions=parser.get_format_instructions())
+    | model 
+    | parser
+)
+
+result = chain.invoke({})
+print(result)  # ['Python', 'JavaScript', 'TypeScript', 'Go', 'Rust']
+print(type(result))  # <class 'list'>
+```
+
+## Structured Output (Recommended)
+
+For OpenAI and compatible models, use `with_structured_output()` for reliable parsing:
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+class Person(BaseModel):
+    """Information about a person."""
+    name: str = Field(description="Full name")
+    age: int = Field(description="Age in years")
+    skills: list[str] = Field(description="List of skills")
+
+model = ChatOpenAI(model="gpt-4")
+structured_model = model.with_structured_output(Person)
+
+# No need for explicit parser or format instructions
+result = structured_model.invoke(
+    "Alice Johnson is 30 years old and knows Python, SQL, and Docker"
+)
+
+print(type(result))     # <class '__main__.Person'>
+print(result.name)      # "Alice Johnson"
+print(result.age)       # 30
+print(result.skills)    # ["Python", "SQL", "Docker"]
+```
+
+### JSON Schema Mode
+
+For flexible JSON output:
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+json_model = model.with_structured_output(method="json_mode")
+
+result = json_model.invoke(
+    "Extract entities from: Tesla was founded by Elon Musk in 2003 in California"
+)
+
+print(result)
+# {"company": "Tesla", "founder": "Elon Musk", "year": 2003, "location": "California"}
+```
+
+<Note>
+`with_structured_output()` uses function calling under the hood, which is more reliable than prompt-based parsing.
+</Note>
+
+## Enum Output Parser
+
+Parse into predefined enums:
+
+```python
+from langchain_core.output_parsers import EnumOutputParser
+from enum import Enum
+
+class Sentiment(str, Enum):
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+    NEUTRAL = "neutral"
+
+parser = EnumOutputParser(enum=Sentiment)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Classify the sentiment.\n{format_instructions}"),
+    ("human", "{text}")
+])
+
+chain = prompt | model | parser
+
+result = chain.invoke({
+    "text": "This product is amazing!",
+    "format_instructions": parser.get_format_instructions()
+})
+
+print(result)  # Sentiment.POSITIVE
+print(type(result))  # <enum 'Sentiment'>
+```
+
+## Datetime Output Parser
+
+Parse dates and times:
+
+```python
+from langchain_core.output_parsers import DatetimeOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+
+parser = DatetimeOutputParser()
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "Extract the date/time.\n{format_instructions}"),
+    ("human", "{text}")
+])
+
+chain = prompt | model | parser
+
+result = chain.invoke({
+    "text": "The meeting is scheduled for December 25, 2024 at 3:30 PM",
+    "format_instructions": parser.get_format_instructions()
+})
+
+print(result)  # datetime.datetime(2024, 12, 25, 15, 30)
+print(type(result))  # <class 'datetime.datetime'>
+```
+
+## Custom Output Parser
+
+Create custom parsers for specific formats:
+
+```python
+from langchain_core.output_parsers import BaseOutputParser
+from langchain_core.exceptions import OutputParserException
+import re
+
+class EmailParser(BaseOutputParser[list[str]]):
+    """Parse email addresses from text."""
+    
+    def parse(self, text: str) -> list[str]:
+        """Extract all email addresses."""
+        pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(pattern, text)
+        
+        if not emails:
+            raise OutputParserException("No email addresses found")
+        
+        return emails
+    
+    def get_format_instructions(self) -> str:
+        return "Include email addresses in your response."
+
+# Use custom parser
+parser = EmailParser()
+chain = model | parser
+
+result = chain.invoke(
+    "Contact us at support@example.com or sales@company.org"
+)
+print(result)  # ['support@example.com', 'sales@company.org']
+```
+
+## Error Handling
+
+Handle parsing failures gracefully:
+
+```python
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.exceptions import OutputParserException
+from pydantic import BaseModel, ValidationError
+
+class Product(BaseModel):
+    name: str
+    price: float
+    in_stock: bool
+
+parser = PydanticOutputParser(pydantic_object=Product)
+
+try:
+    result = parser.parse('{"name": "Widget", "price": "invalid"}')  
+except OutputParserException as e:
+    print(f"Parsing failed: {e}")
+    # Fallback logic
+except ValidationError as e:
+    print(f"Validation failed: {e}")
+    # Handle validation errors
+```
+
+### Retry Parser
+
+Automatically retry with error feedback:
+
+```python
+from langchain_core.output_parsers import RetryOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
+from pydantic import BaseModel
+
+class Data(BaseModel):
+    value: int
+
+base_parser = PydanticOutputParser(pydantic_object=Data)
+retry_parser = RetryOutputParser.from_llm(
+    parser=base_parser,
+    llm=model
+)
+
+# If first parse fails, retry_parser asks LLM to fix the output
+result = retry_parser.parse_with_prompt(
+    '{"value": "not a number"}',  # Invalid
+    prompt_value="Extract the numeric value"
+)
+```
+
+## Streaming with Parsers
+
+Parse streaming outputs:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+model = ChatOpenAI(model="gpt-4")
+parser = StrOutputParser()
+
+chain = model | parser
+
+# Stream and parse chunks
+for chunk in chain.stream("Write a short poem"):
+    print(chunk, end="", flush=True)
+```
+
+### Streaming JSON
+
+```python
+from langchain_core.output_parsers import JsonOutputParser
+
+parser = JsonOutputParser()
+chain = model | parser
+
+# Stream partial JSON objects
+async for chunk in chain.astream("Generate user data as JSON"):
+    print(chunk)  # Partial JSON objects
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use structured output for production">
+    Prefer `with_structured_output()` over prompt-based parsing for reliability.
+  </Step>
+  
+  <Step title="Provide clear schemas">
+    Use descriptive field names and docstrings for better LLM understanding.
+  </Step>
+  
+  <Step title="Include format instructions">
+    Use `get_format_instructions()` to guide the LLM's output format.
+  </Step>
+  
+  <Step title="Handle errors gracefully">
+    Wrap parsing in try-except and provide fallback behavior.
+  </Step>
+  
+  <Step title="Validate outputs">
+    Use Pydantic validators for additional validation logic.
+  </Step>
+  
+  <Step title="Test with edge cases">
+    Test parsers with malformed, incomplete, and edge-case inputs.
+  </Step>
+</Steps>
+
+## Comparison Table
+
+| Parser | Use Case | Output Type | Reliability |
+|--------|----------|-------------|-------------|
+| `StrOutputParser` | Plain text | `str` | High |
+| `JsonOutputParser` | JSON data | `dict` | Medium |
+| `PydanticOutputParser` | Typed models | Pydantic | Medium |
+| `with_structured_output()` | Typed models (recommended) | Pydantic/dict | **High** |
+| `CommaSeparatedListOutputParser` | Simple lists | `list[str]` | Medium |
+| `EnumOutputParser` | Classification | Enum | Medium |
+| `DatetimeOutputParser` | Dates/times | `datetime` | Medium |
+
+## Next Steps
+
+- Learn about [Chat Models](/guides/chat-models) for generation
+- Explore [Streaming](/guides/streaming) for real-time parsing
+- Build agents with [Building Agents](/guides/building-agents)
+- Check out [LangSmith](https://docs.langchain.com/langsmith) for debugging parsers

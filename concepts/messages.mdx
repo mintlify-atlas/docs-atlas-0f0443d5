@@ -1,0 +1,623 @@
+---
+title: Messages
+description: Understanding message types and structure for chat-based interactions in LangChain
+---
+
+Messages are the fundamental units of communication in chat-based language models. LangChain provides a rich type system for representing conversations with different message roles and complex content.
+
+## Message Types
+
+All messages inherit from `BaseMessage` and are defined in `/libs/core/langchain_core/messages/`:
+
+### HumanMessage
+
+Represents user input:
+
+```python
+from langchain_core.messages import HumanMessage
+
+message = HumanMessage(content="What is LangChain?")
+print(message.content)  # "What is LangChain?"
+print(message.type)     # "human"
+```
+
+### AIMessage
+
+Represents model output:
+
+```python
+from langchain_core.messages import AIMessage
+
+message = AIMessage(
+    content="LangChain is a framework for building LLM applications.",
+    response_metadata={"model": "gpt-4", "usage": {...}}
+)
+print(message.content)  # "LangChain is a framework..."
+print(message.type)     # "ai"
+```
+
+See: `/libs/core/langchain_core/messages/ai.py`
+
+### SystemMessage
+
+Provides system-level instructions:
+
+```python
+from langchain_core.messages import SystemMessage
+
+message = SystemMessage(
+    content="You are a helpful assistant that answers questions concisely."
+)
+print(message.type)  # "system"
+```
+
+### ToolMessage
+
+Contains tool execution results:
+
+```python
+from langchain_core.messages import ToolMessage
+
+message = ToolMessage(
+    content="The weather is 72°F and sunny.",
+    tool_call_id="call_123",
+    name="get_weather"
+)
+print(message.type)  # "tool"
+```
+
+### FunctionMessage (Legacy)
+
+Legacy format for function call results:
+
+```python
+from langchain_core.messages import FunctionMessage
+
+message = FunctionMessage(
+    content='{"temperature": 72}',
+    name="get_weather"
+)
+print(message.type)  # "function"
+```
+
+<Note>
+`FunctionMessage` is maintained for backwards compatibility. New code should use `ToolMessage` instead.
+</Note>
+
+### ChatMessage
+
+Generic message with custom role:
+
+```python
+from langchain_core.messages import ChatMessage
+
+message = ChatMessage(
+    content="Custom content",
+    role="moderator"  # Any custom role
+)
+print(message.role)  # "moderator"
+```
+
+## Message Structure
+
+All messages share a common base structure defined in `/libs/core/langchain_core/messages/base.py:93`:
+
+```python
+class BaseMessage:
+    content: str | list[str | dict]
+    """The message content."""
+    
+    additional_kwargs: dict = Field(default_factory=dict)
+    """Reserved for provider-specific data."""
+    
+    response_metadata: dict = Field(default_factory=dict)
+    """Response metadata like model name, token usage."""
+    
+    type: str
+    """The message type identifier."""
+    
+    name: str | None = None
+    """Optional name for the message."""
+    
+    id: str | None = None
+    """Unique identifier, usually from the provider."""
+```
+
+### Content Types
+
+Message content can be:
+
+**Simple string**:
+```python
+HumanMessage(content="Hello world")
+```
+
+**List of content blocks** (multimodal):
+```python
+from langchain_core.messages import HumanMessage
+
+message = HumanMessage(
+    content=[
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+    ]
+)
+```
+
+## Content Blocks
+
+LangChain supports rich content blocks for multimodal interactions:
+
+### TextContentBlock
+
+Plain text content:
+
+```python
+{
+    "type": "text",
+    "text": "This is a text message"
+}
+```
+
+### ImageContentBlock
+
+Image data or URLs:
+
+```python
+# URL-based
+{
+    "type": "image_url",
+    "image_url": {"url": "https://example.com/image.jpg"}
+}
+
+# Base64-encoded
+{
+    "type": "image",
+    "source": {
+        "type": "base64",
+        "media_type": "image/jpeg",
+        "data": "base64_encoded_data_here"
+    }
+}
+```
+
+### AudioContentBlock
+
+Audio content:
+
+```python
+{
+    "type": "audio",
+    "source": {
+        "type": "base64",
+        "media_type": "audio/wav",
+        "data": "base64_audio_data"
+    }
+}
+```
+
+### VideoContentBlock
+
+Video content:
+
+```python
+{
+    "type": "video",
+    "source": {
+        "type": "base64",
+        "media_type": "video/mp4",
+        "data": "base64_video_data"
+    }
+}
+```
+
+### FileContentBlock
+
+Generic file data:
+
+```python
+{
+    "type": "file",
+    "file_id": "file-abc123",
+    "name": "document.pdf"
+}
+```
+
+See: `/libs/core/langchain_core/messages/content.py`
+
+## Tool Calls
+
+AI messages can include tool call requests:
+
+```python
+from langchain_core.messages import AIMessage
+
+message = AIMessage(
+    content="",
+    tool_calls=[
+        {
+            "name": "get_weather",
+            "args": {"location": "San Francisco"},
+            "id": "call_abc123",
+            "type": "tool_call"
+        }
+    ]
+)
+
+for tool_call in message.tool_calls:
+    print(f"Calling {tool_call['name']} with {tool_call['args']}")
+```
+
+The `ToolCall` type is defined in `/libs/core/langchain_core/messages/tool.py:35`:
+
+```python
+class ToolCall(TypedDict):
+    name: str
+    """Tool name."""
+    
+    args: dict[str, Any]
+    """Tool arguments."""
+    
+    id: str
+    """Unique identifier for this tool call."""
+    
+    type: Literal["tool_call"]
+    """Always 'tool_call'."""
+```
+
+## Usage Metadata
+
+AI messages may include token usage information:
+
+```python
+from langchain_core.messages import AIMessage
+
+message = AIMessage(
+    content="Response text",
+    usage_metadata={
+        "input_tokens": 100,
+        "output_tokens": 50,
+        "total_tokens": 150
+    }
+)
+
+print(f"Used {message.usage_metadata['total_tokens']} tokens")
+```
+
+The `UsageMetadata` type from `/libs/core/langchain_core/messages/ai.py`:
+
+```python
+class UsageMetadata(TypedDict):
+    input_tokens: int
+    """Number of input tokens."""
+    
+    output_tokens: int
+    """Number of output tokens."""
+    
+    total_tokens: int
+    """Total tokens (input + output)."""
+    
+    input_token_details: InputTokenDetails | None  # Optional
+    output_token_details: OutputTokenDetails | None  # Optional
+```
+
+## Message Utilities
+
+### convert_to_messages
+
+Convert various formats to messages:
+
+```python
+from langchain_core.messages import convert_to_messages
+
+# From tuples
+messages = convert_to_messages([
+    ("system", "You are helpful."),
+    ("user", "Hello!"),
+    ("ai", "Hi there!")
+])
+
+# From dicts
+messages = convert_to_messages([
+    {"role": "user", "content": "Hello"}
+])
+
+# From message objects (passthrough)
+messages = convert_to_messages([
+    HumanMessage(content="Hello")
+])
+```
+
+### filter_messages
+
+Filter messages by type or custom criteria:
+
+```python
+from langchain_core.messages import filter_messages, HumanMessage, AIMessage
+
+messages = [
+    HumanMessage(content="Hello"),
+    AIMessage(content="Hi"),
+    HumanMessage(content="How are you?")
+]
+
+# Keep only human messages
+human_only = filter_messages(messages, include_types=[HumanMessage])
+
+# Exclude system messages
+no_system = filter_messages(messages, exclude_types=["system"])
+
+# Custom filter
+short_messages = filter_messages(
+    messages,
+    include_types=["human", "ai"],
+    filter_func=lambda m: len(m.content) < 50
+)
+```
+
+### trim_messages
+
+Keep conversation within token limits:
+
+```python
+from langchain_core.messages import trim_messages
+
+messages = [...]  # Long conversation
+
+# Keep last N messages
+trimmed = trim_messages(
+    messages,
+    max_tokens=1000,
+    strategy="last",
+    token_counter=len  # Or use a real token counter
+)
+
+# Keep first N messages
+trimmed = trim_messages(
+    messages,
+    max_tokens=1000,
+    strategy="first"
+)
+```
+
+### merge_message_runs
+
+Combine consecutive messages of the same type:
+
+```python
+from langchain_core.messages import merge_message_runs, HumanMessage
+
+messages = [
+    HumanMessage(content="Hello"),
+    HumanMessage(content="How are you?"),  # Consecutive human message
+    AIMessage(content="I'm good")
+]
+
+merged = merge_message_runs(messages)
+# Result: 2 messages instead of 3
+# HumanMessage(content="Hello\nHow are you?"), AIMessage(...)
+```
+
+### get_buffer_string
+
+Convert messages to string format:
+
+```python
+from langchain_core.messages import get_buffer_string, HumanMessage, AIMessage
+
+messages = [
+    HumanMessage(content="What is AI?"),
+    AIMessage(content="AI is artificial intelligence.")
+]
+
+buffer = get_buffer_string(messages)
+print(buffer)
+# Output:
+# Human: What is AI?
+# AI: AI is artificial intelligence.
+```
+
+## Message Chunks
+
+For streaming, messages have chunk variants:
+
+```python
+from langchain_core.messages import AIMessageChunk
+
+# Receive chunks during streaming
+chunk1 = AIMessageChunk(content="Hello")
+chunk2 = AIMessageChunk(content=" world")
+
+# Combine chunks
+combined = chunk1 + chunk2
+print(combined.content)  # "Hello world"
+```
+
+Supported chunk types:
+- `AIMessageChunk`
+- `HumanMessageChunk`
+- `SystemMessageChunk`
+- `ToolMessageChunk`
+- `FunctionMessageChunk`
+
+### message_chunk_to_message
+
+Convert chunks to full messages:
+
+```python
+from langchain_core.messages import message_chunk_to_message, AIMessageChunk
+
+chunk = AIMessageChunk(content="Complete response")
+message = message_chunk_to_message(chunk)
+
+print(type(message))  # AIMessage
+```
+
+## Working with Chat Models
+
+### Sending Messages
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
+model = ChatOpenAI(model="gpt-4")
+
+messages = [
+    SystemMessage(content="You are a helpful assistant."),
+    HumanMessage(content="What is LangChain?")
+]
+
+response = model.invoke(messages)
+print(response.content)  # AI response
+print(response.usage_metadata)  # Token usage
+```
+
+### Streaming Responses
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="", flush=True)
+```
+
+### Tool Calling
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def get_weather(location: str) -> str:
+    """Get weather for a location."""
+    return f"Weather in {location}: Sunny, 72°F"
+
+model_with_tools = model.bind_tools([get_weather])
+
+response = model_with_tools.invoke([
+    HumanMessage(content="What's the weather in NYC?")
+])
+
+# Check for tool calls
+if response.tool_calls:
+    for tool_call in response.tool_calls:
+        print(f"Tool: {tool_call['name']}")
+        print(f"Args: {tool_call['args']}")
+```
+
+## Message Serialization
+
+### To Dictionary
+
+```python
+from langchain_core.messages import message_to_dict, messages_to_dict, HumanMessage
+
+message = HumanMessage(content="Hello")
+
+# Single message
+dict_msg = message_to_dict(message)
+print(dict_msg)
+# {"type": "human", "content": "Hello", ...}
+
+# Multiple messages
+messages = [HumanMessage(content="Hi"), AIMessage(content="Hello")]
+dict_msgs = messages_to_dict(messages)
+```
+
+### From Dictionary
+
+```python
+from langchain_core.messages import messages_from_dict
+
+dict_msgs = [
+    {"type": "human", "content": "Hello"},
+    {"type": "ai", "content": "Hi there"}
+]
+
+messages = messages_from_dict(dict_msgs)
+```
+
+## Best Practices
+
+<Accordion title="Use appropriate message types">
+Choose the right message type for clarity:
+
+```python
+# Good: Clear message types
+messages = [
+    SystemMessage(content="You are helpful."),
+    HumanMessage(content="Question"),
+    AIMessage(content="Answer")
+]
+
+# Avoid: Generic ChatMessage unless needed
+messages = [
+    ChatMessage(role="system", content="You are helpful."),
+    ChatMessage(role="user", content="Question")  # Use HumanMessage instead
+]
+```
+</Accordion>
+
+<Accordion title="Include message IDs for tracing">
+Provide IDs for better observability:
+
+```python
+from langchain_core.messages import HumanMessage
+import uuid
+
+message = HumanMessage(
+    content="Question",
+    id=str(uuid.uuid4())  # Track this specific message
+)
+```
+</Accordion>
+
+<Accordion title="Preserve tool call IDs">
+When responding to tool calls, preserve the ID:
+
+```python
+# AI message with tool call
+ai_msg = AIMessage(
+    content="",
+    tool_calls=[{"name": "search", "args": {"q": "LangChain"}, "id": "call_123"}]
+)
+
+# Tool response MUST reference the same ID
+tool_msg = ToolMessage(
+    content="Search results...",
+    tool_call_id="call_123"  # Match the original ID
+)
+```
+</Accordion>
+
+<Accordion title="Handle multimodal content properly">
+Use structured content blocks for clarity:
+
+```python
+# Good: Structured content
+HumanMessage(
+    content=[
+        {"type": "text", "text": "Analyze this:"},
+        {"type": "image_url", "image_url": {"url": "..."}}
+    ]
+)
+
+# Less clear: String mixing
+HumanMessage(content="Analyze this: [image attached]")
+```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Runnables" icon="link" href="/concepts/runnables">
+    Compose messages in chains and workflows
+  </Card>
+  <Card title="Tools" icon="wrench" href="/concepts/tools">
+    Build tools that interact with messages
+  </Card>
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Create agents that use messages and tools
+  </Card>
+  <Card title="Chat Models" icon="comments" href="/integrations/chat-models">
+    Work with different chat model providers
+  </Card>
+</CardGroup>

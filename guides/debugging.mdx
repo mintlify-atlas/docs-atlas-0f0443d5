@@ -1,0 +1,539 @@
+---
+title: Debugging Applications
+description: Debug and troubleshoot LangChain applications effectively
+---
+
+Debugging LLM applications requires different techniques than traditional software. This guide covers tools and strategies for finding and fixing issues in LangChain applications.
+
+## Enable Debug Mode
+
+Set verbose mode for detailed logging:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.globals import set_debug, set_verbose
+
+# Enable debug mode globally
+set_debug(True)
+set_verbose(True)
+
+model = ChatOpenAI(model="gpt-4")
+response = model.invoke("Hello")
+
+# Output shows:
+# - Full prompts sent to LLM
+# - Complete LLM responses
+# - Token counts
+# - Timing information
+```
+
+### Component-Level Verbosity
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+# Enable verbose for specific components
+model = ChatOpenAI(model="gpt-4", verbose=True)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant"),
+    ("human", "{question}")
+])
+
+# Chain inherits verbosity
+chain = prompt | model
+chain.invoke({"question": "What is LangChain?"})
+```
+
+## Inspecting Chain Steps
+
+Debug chains by inspecting intermediate outputs:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+
+model = ChatOpenAI(model="gpt-4")
+
+prompt = ChatPromptTemplate.from_template(
+    "Translate to {language}: {text}"
+)
+
+chain = prompt | model | StrOutputParser()
+
+# Inspect each step
+input_data = {"language": "French", "text": "Hello world"}
+
+# 1. Check prompt formatting
+formatted_prompt = prompt.invoke(input_data)
+print("Formatted prompt:")
+print(formatted_prompt)
+
+# 2. Check model response
+model_response = model.invoke(formatted_prompt)
+print("\nModel response:")
+print(model_response)
+
+# 3. Check parser output
+parsed_output = StrOutputParser().invoke(model_response)
+print("\nParsed output:")
+print(parsed_output)
+```
+
+## Using RunnableConfig
+
+Pass debugging metadata through chains:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.runnables import RunnableConfig
+import time
+
+model = ChatOpenAI(model="gpt-4")
+
+# Create config with metadata
+config = RunnableConfig(
+    tags=["debug", "test"],
+    metadata={"user_id": "123", "session": "abc"},
+    run_name="debug_run"
+)
+
+# Use config in invocation
+start = time.time()
+response = model.invoke("Tell me a joke", config=config)
+end = time.time()
+
+print(f"Response: {response.content}")
+print(f"Duration: {end - start:.2f}s")
+```
+
+## Tracing with Callbacks
+
+Implement custom callbacks for detailed tracing:
+
+```python
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_openai import ChatOpenAI
+from typing import Any
+
+class DebugHandler(BaseCallbackHandler):
+    """Custom callback for debugging."""
+    
+    def on_llm_start(self, serialized: dict, prompts: list[str], **kwargs) -> None:
+        print(f"\n{'='*50}")
+        print("LLM START")
+        print(f"Model: {serialized.get('name', 'unknown')}")
+        print(f"Prompts: {prompts}")
+    
+    def on_llm_end(self, response, **kwargs) -> None:
+        print(f"\nLLM END")
+        print(f"Response: {response}")
+        print(f"{'='*50}\n")
+    
+    def on_llm_error(self, error: Exception, **kwargs) -> None:
+        print(f"\nLLM ERROR: {error}")
+        print(f"{'='*50}\n")
+    
+    def on_chain_start(self, serialized: dict, inputs: dict, **kwargs) -> None:
+        print(f"\nChain started: {serialized.get('name', 'unknown')}")
+        print(f"Inputs: {inputs}")
+    
+    def on_chain_end(self, outputs: dict, **kwargs) -> None:
+        print(f"\nChain ended")
+        print(f"Outputs: {outputs}")
+
+# Use debug handler
+handler = DebugHandler()
+model = ChatOpenAI(model="gpt-4", callbacks=[handler])
+
+model.invoke("What is 2+2?")
+```
+
+## LangSmith Integration
+
+Use LangSmith for production debugging:
+
+```python
+import os
+from langchain_openai import ChatOpenAI
+
+# Enable LangSmith tracing
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "your-api-key"
+os.environ["LANGCHAIN_PROJECT"] = "my-project"
+
+model = ChatOpenAI(model="gpt-4")
+
+# All invocations are automatically traced
+response = model.invoke("Explain quantum computing")
+
+# View traces at: https://smith.langchain.com
+```
+
+### Custom Run Names
+
+```python
+from langchain_core.runnables import RunnableConfig
+
+# Tag runs for easy filtering
+config = RunnableConfig(
+    run_name="quantum_explanation",
+    tags=["science", "tutorial"],
+    metadata={"version": "1.0"}
+)
+
+response = model.invoke("Explain quantum computing", config=config)
+```
+
+## Debugging Retrieval
+
+Inspect retrieval quality:
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
+
+# Create vector store
+docs = [
+    Document(page_content="LangChain is a framework", metadata={"id": 1}),
+    Document(page_content="Python is a language", metadata={"id": 2}),
+    Document(page_content="Debugging helps find issues", metadata={"id": 3}),
+]
+
+vectorstore = InMemoryVectorStore.from_documents(
+    docs,
+    embedding=OpenAIEmbeddings()
+)
+
+# Debug retrieval
+query = "What is LangChain?"
+results = vectorstore.similarity_search_with_score(query, k=3)
+
+print(f"Query: {query}\n")
+for doc, score in results:
+    print(f"Score: {score:.4f}")
+    print(f"Content: {doc.page_content}")
+    print(f"Metadata: {doc.metadata}\n")
+```
+
+### Retrieval Debugging Tips
+
+<Steps>
+  <Step title="Check similarity scores">
+    Low scores indicate poor matches. Consider adjusting chunk size or embeddings model.
+  </Step>
+  
+  <Step title="Inspect retrieved content">
+    Verify that retrieved documents actually contain relevant information.
+  </Step>
+  
+  <Step title="Test edge cases">
+    Try queries with typos, synonyms, and different phrasings.
+  </Step>
+  
+  <Step title="Compare embedding models">
+    Different models may perform better for your domain.
+  </Step>
+</Steps>
+
+## Debugging Output Parsers
+
+Handle parsing failures:
+
+```python
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.exceptions import OutputParserException
+from pydantic import BaseModel, ValidationError
+from langchain_openai import ChatOpenAI
+
+class Person(BaseModel):
+    name: str
+    age: int
+
+parser = PydanticOutputParser(pydantic_object=Person)
+model = ChatOpenAI(model="gpt-4")
+
+try:
+    # Try parsing
+    result = parser.parse('{"name": "Alice", "age": "invalid"}')
+except OutputParserException as e:
+    print(f"Parsing failed: {e}")
+    print(f"\nDebug: Check LLM output format")
+    
+    # Get raw LLM output for debugging
+    raw_response = model.invoke("Generate person info")
+    print(f"Raw output: {raw_response.content}")
+    
+except ValidationError as e:
+    print(f"Validation failed: {e}")
+    print("\nDebug: Check schema definition")
+```
+
+## Testing Prompts
+
+Test prompts with different inputs:
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a {role}"),
+    ("human", "Answer this question: {question}")
+])
+
+# Test with various inputs
+test_cases = [
+    {"role": "teacher", "question": "What is 2+2?"},
+    {"role": "comedian", "question": "What is 2+2?"},
+    {"role": "philosopher", "question": "What is 2+2?"},
+]
+
+for i, test in enumerate(test_cases, 1):
+    print(f"\nTest {i}:")
+    formatted = prompt.format_messages(**test)
+    for msg in formatted:
+        print(f"{msg.type}: {msg.content}")
+```
+
+## Common Issues
+
+<Tabs>
+  <Tab title="API Errors">
+    ```python
+    from langchain_openai import ChatOpenAI
+    from openai import APIError, RateLimitError
+    
+    model = ChatOpenAI(model="gpt-4")
+    
+    try:
+        response = model.invoke("Hello")
+    except RateLimitError:
+        print("Rate limit hit - slow down requests")
+    except APIError as e:
+        print(f"API error: {e}")
+        print("Check API key and network connection")
+    ```
+  </Tab>
+  
+  <Tab title="Context Length Errors">
+    ```python
+    from langchain_openai import ChatOpenAI
+    from langchain_core.exceptions import ContextOverflowError
+    
+    model = ChatOpenAI(model="gpt-4")
+    
+    try:
+        long_text = "word " * 50000  # Too long
+        response = model.invoke(long_text)
+    except ContextOverflowError:
+        print("Input too long - reduce context size")
+        # Truncate or summarize input
+    ```
+  </Tab>
+  
+  <Tab title="Empty Responses">
+    ```python
+    from langchain_openai import ChatOpenAI
+    
+    model = ChatOpenAI(model="gpt-4")
+    response = model.invoke("Question")
+    
+    if not response.content:
+        print("Empty response received")
+        print(f"Full response: {response}")
+        # Check if model returned function call instead
+        if response.tool_calls:
+            print(f"Tool calls: {response.tool_calls}")
+    ```
+  </Tab>
+  
+  <Tab title="Slow Performance">
+    ```python
+    import time
+    from langchain_openai import ChatOpenAI
+    
+    model = ChatOpenAI(model="gpt-4")
+    
+    # Measure latency
+    start = time.time()
+    response = model.invoke("Quick question")
+    latency = time.time() - start
+    
+    print(f"Latency: {latency:.2f}s")
+    
+    if latency > 5:
+        print("Slow response - consider:")
+        print("- Using faster model (gpt-4o-mini)")
+        print("- Reducing input length")
+        print("- Enabling streaming")
+    ```
+  </Tab>
+</Tabs>
+
+## Token Usage Debugging
+
+Track and optimize token usage:
+
+```python
+from langchain_openai import ChatOpenAI
+import tiktoken
+
+def debug_tokens(text: str, model_name: str = "gpt-4"):
+    """Analyze token usage."""
+    encoding = tiktoken.encoding_for_model(model_name)
+    tokens = encoding.encode(text)
+    
+    print(f"Text: {text[:100]}...")
+    print(f"Character count: {len(text)}")
+    print(f"Token count: {len(tokens)}")
+    print(f"Tokens per character: {len(tokens)/len(text):.2f}")
+    print(f"\nFirst 10 tokens: {tokens[:10]}")
+    
+    return tokens
+
+# Debug a prompt
+text = "Explain quantum computing in detail"
+tokens = debug_tokens(text)
+
+# Check model response tokens
+model = ChatOpenAI(model="gpt-4")
+response = model.invoke(text)
+
+if response.usage_metadata:
+    print(f"\nInput tokens: {response.usage_metadata.input_tokens}")
+    print(f"Output tokens: {response.usage_metadata.output_tokens}")
+    print(f"Total tokens: {response.usage_metadata.total_tokens}")
+```
+
+## Memory Debugging
+
+Debug conversation memory:
+
+```python
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+
+# Track conversation
+messages = [
+    SystemMessage(content="You are a helpful assistant"),
+]
+
+def debug_conversation(user_input: str):
+    """Debug conversation state."""
+    print(f"\n{'='*50}")
+    print(f"User: {user_input}")
+    
+    messages.append(HumanMessage(content=user_input))
+    
+    # Show conversation state
+    print(f"\nConversation history ({len(messages)} messages):")
+    for i, msg in enumerate(messages):
+        print(f"  {i}. {msg.type}: {msg.content[:50]}...")
+    
+    # Get response
+    response = model.invoke(messages)
+    messages.append(response)
+    
+    print(f"\nAssistant: {response.content}")
+    print(f"{'='*50}")
+    
+    return response.content
+
+# Test conversation
+debug_conversation("My name is Alice")
+debug_conversation("What's my name?")
+```
+
+## Error Recovery Patterns
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+import time
+
+def invoke_with_retry(
+    model,
+    input_data,
+    max_retries: int = 3,
+    backoff_factor: float = 2.0
+):
+    """Invoke with exponential backoff retry."""
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Attempt {attempt + 1}/{max_retries}")
+            response = model.invoke(input_data)
+            print("Success!")
+            return response
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            
+            if attempt < max_retries - 1:
+                sleep_time = backoff_factor ** attempt
+                print(f"Retrying in {sleep_time}s...")
+                time.sleep(sleep_time)
+            else:
+                print("Max retries exceeded")
+                raise
+
+# Use with retry
+model = ChatOpenAI(model="gpt-4")
+response = invoke_with_retry(model, "Hello")
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Start with verbose mode">
+    Enable `set_debug(True)` during development to see all operations.
+  </Step>
+  
+  <Step title="Use LangSmith for production">
+    Set up LangSmith tracing for production debugging and monitoring.
+  </Step>
+  
+  <Step title="Log inputs and outputs">
+    Keep logs of prompts, responses, and errors for post-mortem analysis.
+  </Step>
+  
+  <Step title="Test edge cases">
+    Test with empty inputs, very long inputs, and malformed data.
+  </Step>
+  
+  <Step title="Monitor token usage">
+    Track token consumption to identify expensive operations.
+  </Step>
+  
+  <Step title="Implement error recovery">
+    Add retry logic and fallbacks for robust production systems.
+  </Step>
+</Steps>
+
+## Debugging Checklist
+
+- [ ] Enable debug/verbose mode
+- [ ] Check API keys and environment variables
+- [ ] Verify input data format
+- [ ] Inspect intermediate chain outputs
+- [ ] Review error messages and stack traces
+- [ ] Test with simpler inputs
+- [ ] Check token counts and limits
+- [ ] Verify model availability and version
+- [ ] Review retrieval results and scores
+- [ ] Test output parser separately
+- [ ] Enable LangSmith tracing
+- [ ] Check network connectivity
+
+## Next Steps
+
+- Learn about [LangSmith](https://docs.langchain.com/langsmith) for observability
+- Explore [Chat Models](/guides/chat-models) for configuration
+- Build robust [Agents](/guides/building-agents) with error handling
+- Check the [API Reference](https://reference.langchain.com/python) for details

@@ -1,0 +1,496 @@
+---
+title: Chains
+description: Composing components into deterministic sequences with LangChain Expression Language
+---
+
+Chains are sequences of components connected together to accomplish specific tasks. In modern LangChain, chains are built using the LangChain Expression Language (LCEL) through the Runnable protocol.
+
+<Note>
+Legacy `Chain` classes (like `LLMChain`, `SimpleSequentialChain`) are deprecated. Use LCEL composition with the `|` pipe operator instead. See the [Runnables documentation](/concepts/runnables) for the recommended approach.
+</Note>
+
+## LCEL Chains
+
+Modern chains use the pipe operator to compose Runnables:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+# Define components
+prompt = ChatPromptTemplate.from_template("Tell me a joke about {topic}")
+model = ChatOpenAI(model="gpt-4")
+output_parser = StrOutputParser()
+
+# Compose into chain
+chain = prompt | model | output_parser
+
+# Execute
+result = chain.invoke({"topic": "programming"})
+print(result)  # "Why do programmers prefer dark mode?..."
+```
+
+This creates a `RunnableSequence` that:
+1. Formats the prompt with input variables
+2. Sends the formatted prompt to the model
+3. Parses the model output to a string
+
+## Common Chain Patterns
+
+### Prompt + Model + Parser
+
+The most common pattern combines these three components:
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+chain = (
+    ChatPromptTemplate.from_messages([
+        ("system", "You are a helpful assistant."),
+        ("user", "{input}")
+    ])
+    | ChatOpenAI(model="gpt-4")
+    | StrOutputParser()
+)
+
+result = chain.invoke({"input": "What is LangChain?"})  # Returns string
+```
+
+### Sequential Processing
+
+Chain multiple processing steps:
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+def extract_keywords(text: str) -> dict:
+    # Extract keywords logic
+    return {"keywords": ["AI", "ML"], "original": text}
+
+def format_output(data: dict) -> str:
+    return f"Keywords: {', '.join(data['keywords'])}"
+
+chain = (
+    RunnableLambda(extract_keywords)
+    | RunnableLambda(format_output)
+)
+
+result = chain.invoke("Article about AI and ML")
+print(result)  # "Keywords: AI, ML"
+```
+
+### Parallel Branches
+
+Execute multiple operations concurrently:
+
+```python
+from langchain_core.runnables import RunnableParallel
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+model = ChatOpenAI(model="gpt-4")
+
+# Create parallel branches
+chain = RunnableParallel(
+    summary=(
+        ChatPromptTemplate.from_template("Summarize: {text}")
+        | model
+        | StrOutputParser()
+    ),
+    keywords=(
+        ChatPromptTemplate.from_template("Extract keywords from: {text}")
+        | model
+        | StrOutputParser()
+    ),
+    sentiment=(
+        ChatPromptTemplate.from_template("Analyze sentiment of: {text}")
+        | model
+        | StrOutputParser()
+    )
+)
+
+result = chain.invoke({"text": "Long article text..."})
+print(result)
+# {
+#   "summary": "Brief summary...",
+#   "keywords": "AI, automation, future",
+#   "sentiment": "Positive"
+# }
+```
+
+### Conditional Routing
+
+Route inputs based on conditions:
+
+```python
+from langchain_core.runnables import RunnableBranch, RunnableLambda
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+
+# Route based on input length
+chain = RunnableBranch(
+    (
+        lambda x: len(x["text"]) > 1000,
+        ChatPromptTemplate.from_template("Summarize this long text: {text}") | model
+    ),
+    (
+        lambda x: len(x["text"]) > 100,
+        ChatPromptTemplate.from_template("Analyze this text: {text}") | model
+    ),
+    # Default branch for short text
+    ChatPromptTemplate.from_template("Echo: {text}") | model
+)
+
+result = chain.invoke({"text": "Short message"})
+```
+
+### Retry with Fallbacks
+
+Provide fallback models on failure:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+
+primary_model = ChatOpenAI(model="gpt-4")
+fallback_model = ChatAnthropic(model="claude-3-sonnet-20240229")
+
+chain = (
+    prompt
+    | primary_model.with_fallbacks([fallback_model])
+    | output_parser
+)
+
+# Uses fallback_model if primary_model fails
+result = chain.invoke({"topic": "AI"})
+```
+
+### Map-Reduce Pattern
+
+Process items in parallel then combine:
+
+```python
+from langchain_core.runnables import RunnableLambda
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+
+# Map: Process each document
+map_chain = (
+    ChatPromptTemplate.from_template("Summarize: {doc}")
+    | model
+    | StrOutputParser()
+)
+
+# Reduce: Combine summaries
+reduce_chain = (
+    ChatPromptTemplate.from_template(
+        "Combine these summaries into one:\n{summaries}"
+    )
+    | model
+    | StrOutputParser()
+)
+
+# Full chain
+def map_reduce(docs: list[str]) -> str:
+    # Map phase
+    summaries = map_chain.batch([{"doc": d} for d in docs])
+    # Reduce phase
+    combined = reduce_chain.invoke({"summaries": "\n".join(summaries)})
+    return combined
+
+result = map_reduce(["Doc 1 text...", "Doc 2 text...", "Doc 3 text..."])
+```
+
+## Working with Context
+
+### Adding Context with assign()
+
+Enrich data as it flows through the chain:
+
+```python
+from langchain_core.runnables import RunnablePassthrough
+from operator import itemgetter
+
+chain = (
+    # Start with just the question
+    RunnablePassthrough.assign(
+        # Add context from a retriever
+        context=itemgetter("question") | retriever,
+    )
+    | RunnablePassthrough.assign(
+        # Add answer using context
+        answer=(
+            ChatPromptTemplate.from_template(
+                "Answer based on context:\n{context}\n\nQuestion: {question}"
+            )
+            | model
+            | StrOutputParser()
+        )
+    )
+)
+
+result = chain.invoke({"question": "What is LangChain?"}) 
+# {
+#   "question": "What is LangChain?",
+#   "context": [Document(...), Document(...)],
+#   "answer": "LangChain is..."
+# }
+```
+
+### Using itemgetter
+
+Extract specific fields from dicts:
+
+```python
+from operator import itemgetter
+from langchain_core.runnables import RunnableParallel
+
+# Extract multiple fields for parallel processing
+chain = (
+    RunnableParallel(
+        question=itemgetter("question"),
+        language=itemgetter("language"),
+    )
+    | ChatPromptTemplate.from_template(
+        "Answer in {language}: {question}"
+    )
+    | model
+)
+
+result = chain.invoke({
+    "question": "What is AI?",
+    "language": "Spanish",
+    "other_field": "ignored"
+})
+```
+
+## Streaming Chains
+
+All LCEL chains support streaming:
+
+```python
+chain = prompt | model | output_parser
+
+# Stream tokens as they're generated
+for chunk in chain.stream({"topic": "AI"}):
+    print(chunk, end="", flush=True)
+```
+
+Stream with intermediate results:
+
+```python
+async for event in chain.astream_events({"topic": "AI"}, version="v2"):
+    kind = event["event"]
+    
+    if kind == "on_chat_model_stream":
+        chunk = event["data"]["chunk"]
+        print(chunk.content, end="", flush=True)
+    elif kind == "on_parser_stream":
+        print(f"Parser: {event['data']}")
+```
+
+## Batch Processing
+
+Process multiple inputs efficiently:
+
+```python
+chain = prompt | model | output_parser
+
+inputs = [
+    {"topic": "programming"},
+    {"topic": "science"},
+    {"topic": "history"}
+]
+
+# Parallel batch processing
+results = chain.batch(inputs)
+
+for result in results:
+    print(result)
+```
+
+Control concurrency:
+
+```python
+from langchain_core.runnables import RunnableConfig
+
+results = chain.batch(
+    inputs,
+    config=RunnableConfig(max_concurrency=5)
+)
+```
+
+## Debugging Chains
+
+### Print Intermediate Steps
+
+```python
+from langchain_core.globals import set_debug
+
+set_debug(True)
+
+chain = prompt | model | output_parser
+chain.invoke({"topic": "AI"})  # Prints each step
+```
+
+### Custom Callbacks
+
+```python
+from langchain_core.callbacks import StdOutCallbackHandler
+
+result = chain.invoke(
+    {"topic": "AI"},
+    config={"callbacks": [StdOutCallbackHandler()]}
+)
+```
+
+### Inspect Schema
+
+```python
+# View expected input schema
+print(chain.input_schema.model_json_schema())
+
+# View output schema
+print(chain.output_schema.model_json_schema())
+```
+
+## Chain Configuration
+
+Bind default configuration:
+
+```python
+chain = (
+    prompt 
+    | model.with_config(
+        tags=["production"],
+        metadata={"version": "1.0"},
+    )
+    | output_parser
+)
+
+# Configuration applies to all invocations
+result = chain.invoke({"topic": "AI"})
+```
+
+## Legacy Chains (Deprecated)
+
+<Warning>
+Legacy `Chain` classes are deprecated. Migrate to LCEL for better performance, streaming support, and type safety.
+</Warning>
+
+### LLMChain (Deprecated)
+
+```python
+# Old approach (don't use)
+from langchain.chains import LLMChain
+
+chain = LLMChain(llm=model, prompt=prompt)
+result = chain.run(topic="AI")
+
+# New approach (use this)
+chain = prompt | model | StrOutputParser()
+result = chain.invoke({"topic": "AI"})
+```
+
+### SimpleSequentialChain (Deprecated)
+
+```python
+# Old approach (don't use)
+from langchain.chains import SimpleSequentialChain
+
+chain = SimpleSequentialChain(chains=[chain1, chain2])
+
+# New approach (use this)
+chain = chain1 | chain2
+```
+
+## Best Practices
+
+<Accordion title="Type hints improve reliability">
+Add type annotations to custom functions:
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+def process(data: dict[str, str]) -> str:
+    return data["text"].upper()
+
+chain = RunnableLambda(process) | model
+# Type errors caught early
+```
+</Accordion>
+
+<Accordion title="Use structured outputs">
+Pydantic models ensure type safety:
+
+```python
+from pydantic import BaseModel
+from langchain_core.output_parsers import PydanticOutputParser
+
+class Response(BaseModel):
+    answer: str
+    confidence: float
+
+parser = PydanticOutputParser(pydantic_object=Response)
+
+chain = (
+    ChatPromptTemplate.from_template(
+        "Answer this question:\n{question}\n\n{format_instructions}"
+    ).partial(format_instructions=parser.get_format_instructions())
+    | model
+    | parser
+)
+
+result = chain.invoke({"question": "What is AI?"})  # Returns Response object
+```
+</Accordion>
+
+<Accordion title="Leverage parallel execution">
+Use RunnableParallel for independent operations:
+
+```python
+# Slow: Sequential execution
+chain = step1 | step2 | step3  # 3 seconds
+
+# Fast: Parallel execution
+chain = RunnableParallel(
+    result1=step1,
+    result2=step2,
+    result3=step3
+)  # 1 second (if steps are independent)
+```
+</Accordion>
+
+<Accordion title="Handle errors gracefully">
+Add fallbacks for reliability:
+
+```python
+chain = (
+    prompt
+    | model.with_fallbacks([fallback_model])
+    | output_parser.with_fallbacks([simple_parser])
+)
+```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Runnables" icon="link" href="/concepts/runnables">
+    Deep dive into the Runnable protocol and LCEL
+  </Card>
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Build dynamic agents that choose their own actions
+  </Card>
+  <Card title="Messages" icon="message" href="/concepts/messages">
+    Work with chat messages in chains
+  </Card>
+  <Card title="Tools" icon="wrench" href="/concepts/tools">
+    Integrate tools into your chains
+  </Card>
+</CardGroup>

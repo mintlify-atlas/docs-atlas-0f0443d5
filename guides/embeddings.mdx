@@ -1,0 +1,423 @@
+---
+title: Using Embeddings
+description: Convert text to vectors for semantic search and similarity
+---
+
+Embeddings transform text into numerical vectors that capture semantic meaning. Similar texts produce similar vectors, enabling semantic search, clustering, and recommendations.
+
+## What are Embeddings?
+
+Embeddings are dense vector representations of text. They map text to points in a high-dimensional space where semantically similar content is located close together.
+
+```python
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+# Embed a single query
+query_vector = embeddings.embed_query("What is LangChain?")
+print(len(query_vector))  # 1536 dimensions
+print(query_vector[:5])   # [0.123, -0.456, 0.789, ...]
+```
+
+## Basic Usage
+
+All embedding models implement two key methods:
+
+<CodeGroup>
+```python embed_query
+# Embed a single query or search term
+query = "machine learning frameworks"
+vector = embeddings.embed_query(query)
+
+# Returns a single vector (list of floats)
+print(len(vector))  # e.g., 1536
+```
+
+```python embed_documents
+# Embed multiple documents efficiently
+documents = [
+    "LangChain is a framework for LLM applications",
+    "Python is a programming language",
+    "Vector databases store embeddings"
+]
+
+vectors = embeddings.embed_documents(documents)
+
+# Returns list of vectors
+print(len(vectors))      # 3 documents
+print(len(vectors[0]))   # 1536 dimensions each
+```
+</CodeGroup>
+
+<Note>
+Use `embed_query()` for search queries and `embed_documents()` for the content being searched. Some models optimize these differently.
+</Note>
+
+## Provider Options
+
+LangChain supports multiple embedding providers:
+
+<Tabs>
+  <Tab title="OpenAI">
+    ```python
+    from langchain_openai import OpenAIEmbeddings
+    
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-large",  # or text-embedding-3-small
+        api_key="your-openai-key"
+    )
+    
+    # OpenAI models:
+    # - text-embedding-3-small: Fast, cost-effective (1536 dims)
+    # - text-embedding-3-large: Higher quality (3072 dims)
+    # - text-embedding-ada-002: Legacy model
+    ```
+  </Tab>
+  
+  <Tab title="Hugging Face">
+    ```python
+    from langchain_huggingface import HuggingFaceEmbeddings
+    
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-mpnet-base-v2"
+    )
+    
+    # Popular models:
+    # - all-mpnet-base-v2: Good general purpose
+    # - all-MiniLM-L6-v2: Fast and lightweight
+    # - multi-qa-mpnet-base-dot-v1: Optimized for QA
+    ```
+  </Tab>
+  
+  <Tab title="Local (Ollama)">
+    ```python
+    from langchain_ollama import OllamaEmbeddings
+    
+    embeddings = OllamaEmbeddings(
+        model="nomic-embed-text",
+        base_url="http://localhost:11434"
+    )
+    
+    # Run locally with Ollama
+    # No API key required, fully private
+    ```
+  </Tab>
+  
+  <Tab title="Cohere">
+    ```python
+    from langchain_cohere import CohereEmbeddings
+    
+    embeddings = CohereEmbeddings(
+        model="embed-english-v3.0",
+        api_key="your-cohere-key"
+    )
+    
+    # Cohere models support different input types
+    # - search_document: For documents to be searched
+    # - search_query: For search queries
+    ```
+  </Tab>
+</Tabs>
+
+## Vector Similarity
+
+Compare embeddings to find similar content:
+
+```python
+import numpy as np
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings()
+
+# Embed documents
+docs = [
+    "Python is a programming language",
+    "Java is a programming language",
+    "The sky is blue"
+]
+
+vectors = embeddings.embed_documents(docs)
+
+# Embed query
+query = "coding languages"
+query_vector = embeddings.embed_query(query)
+
+def cosine_similarity(vec1, vec2):
+    """Calculate cosine similarity between two vectors."""
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+    return dot_product / (norm1 * norm2)
+
+# Find most similar document
+for i, doc_vector in enumerate(vectors):
+    similarity = cosine_similarity(query_vector, doc_vector)
+    print(f"Doc {i}: {similarity:.4f} - {docs[i]}")
+
+# Output:
+# Doc 0: 0.8756 - Python is a programming language
+# Doc 1: 0.8543 - Java is a programming language  
+# Doc 2: 0.3421 - The sky is blue
+```
+
+## Storing Embeddings
+
+Use vector stores to persist and search embeddings:
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_core.documents import Document
+
+# Create documents
+docs = [
+    Document(
+        page_content="LangChain simplifies LLM application development",
+        metadata={"source": "docs", "page": 1}
+    ),
+    Document(
+        page_content="Embeddings convert text to numerical vectors",
+        metadata={"source": "docs", "page": 2}
+    ),
+    Document(
+        page_content="Vector stores enable semantic search",
+        metadata={"source": "docs", "page": 3}
+    )
+]
+
+# Create vector store with embeddings
+embeddings = OpenAIEmbeddings()
+vectorstore = InMemoryVectorStore.from_documents(
+    docs,
+    embedding=embeddings
+)
+
+# Search by similarity
+results = vectorstore.similarity_search(
+    "How do I search semantically?",
+    k=2  # Return top 2 results
+)
+
+for doc in results:
+    print(f"Content: {doc.page_content}")
+    print(f"Metadata: {doc.metadata}\n")
+```
+
+## Async Embeddings
+
+Process embeddings asynchronously for better performance:
+
+```python
+import asyncio
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings()
+
+async def embed_documents_async():
+    documents = [
+        "Document 1 content",
+        "Document 2 content",
+        "Document 3 content"
+    ]
+    
+    # Async document embedding
+    vectors = await embeddings.aembed_documents(documents)
+    print(f"Embedded {len(vectors)} documents")
+    
+    # Async query embedding
+    query_vector = await embeddings.aembed_query("search query")
+    print(f"Query vector: {len(query_vector)} dimensions")
+    
+    return vectors, query_vector
+
+# Run async function
+vectors, query_vector = await embed_documents_async()
+```
+
+## Batch Processing
+
+Handle large document sets efficiently:
+
+```python
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings()
+
+def batch_embed(texts: list[str], batch_size: int = 100):
+    """Embed documents in batches to avoid rate limits."""
+    all_vectors = []
+    
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        vectors = embeddings.embed_documents(batch)
+        all_vectors.extend(vectors)
+        print(f"Processed {min(i + batch_size, len(texts))}/{len(texts)}")
+    
+    return all_vectors
+
+# Process 1000 documents in batches
+large_dataset = [f"Document {i}" for i in range(1000)]
+vectors = batch_embed(large_dataset, batch_size=50)
+```
+
+## Dimensionality Reduction
+
+Reduce vector dimensions for storage efficiency:
+
+```python
+from langchain_openai import OpenAIEmbeddings
+import numpy as np
+from sklearn.decomposition import PCA
+
+embeddings = OpenAIEmbeddings()
+
+# Generate embeddings
+texts = ["Sample text {i}" for i in range(100)]
+vectors = embeddings.embed_documents(texts)
+
+# Reduce from 1536 to 256 dimensions
+pca = PCA(n_components=256)
+reduced_vectors = pca.fit_transform(vectors)
+
+print(f"Original shape: {np.array(vectors).shape}")  # (100, 1536)
+print(f"Reduced shape: {reduced_vectors.shape}")      # (100, 256)
+print(f"Variance retained: {pca.explained_variance_ratio_.sum():.2%}")
+```
+
+## Caching Embeddings
+
+Cache embeddings to avoid recomputing:
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from functools import lru_cache
+import hashlib
+
+class CachedEmbeddings:
+    def __init__(self, embeddings: OpenAIEmbeddings):
+        self.embeddings = embeddings
+        self.cache = {}
+    
+    def _hash(self, text: str) -> str:
+        return hashlib.md5(text.encode()).hexdigest()
+    
+    def embed_query(self, text: str) -> list[float]:
+        key = self._hash(text)
+        if key not in self.cache:
+            self.cache[key] = self.embeddings.embed_query(text)
+        return self.cache[key]
+    
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        results = []
+        to_embed = []
+        indices = []
+        
+        for i, text in enumerate(texts):
+            key = self._hash(text)
+            if key in self.cache:
+                results.append(self.cache[key])
+            else:
+                to_embed.append(text)
+                indices.append(i)
+        
+        if to_embed:
+            new_vectors = self.embeddings.embed_documents(to_embed)
+            for text, vector in zip(to_embed, new_vectors):
+                self.cache[self._hash(text)] = vector
+                results.append(vector)
+        
+        return results
+
+# Use cached embeddings
+base_embeddings = OpenAIEmbeddings()
+cached = CachedEmbeddings(base_embeddings)
+
+# First call hits API
+vec1 = cached.embed_query("What is AI?")
+# Second call uses cache
+vec2 = cached.embed_query("What is AI?")
+```
+
+## Metadata Filtering
+
+Combine embeddings with metadata for filtered search:
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
+
+# Documents with metadata
+docs = [
+    Document(
+        page_content="Python tutorial for beginners",
+        metadata={"language": "python", "level": "beginner"}
+    ),
+    Document(
+        page_content="Advanced Python techniques",
+        metadata={"language": "python", "level": "advanced"}
+    ),
+    Document(
+        page_content="JavaScript basics",
+        metadata={"language": "javascript", "level": "beginner"}
+    ),
+]
+
+vectorstore = InMemoryVectorStore.from_documents(
+    docs,
+    embedding=OpenAIEmbeddings()
+)
+
+# Search with metadata filter
+results = vectorstore.similarity_search(
+    "programming tutorial",
+    k=2,
+    filter={"level": "beginner"}
+)
+
+for doc in results:
+    print(f"{doc.page_content} - {doc.metadata}")
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Choose the right model">
+    Balance cost, speed, and quality. OpenAI's small model is often sufficient.
+  </Step>
+  
+  <Step title="Normalize text">
+    Clean and normalize text before embedding for better consistency.
+  </Step>
+  
+  <Step title="Batch processing">
+    Embed multiple documents at once to reduce API overhead and costs.
+  </Step>
+  
+  <Step title="Cache embeddings">
+    Cache computed embeddings to avoid redundant API calls.
+  </Step>
+  
+  <Step title="Use async for scale">
+    Process large datasets with async methods for better performance.
+  </Step>
+  
+  <Step title="Monitor costs">
+    Track embedding volume to manage API costs, especially with large datasets.
+  </Step>
+</Steps>
+
+## Common Use Cases
+
+- **Semantic Search**: Find relevant documents by meaning, not just keywords
+- **Similarity Detection**: Identify duplicate or related content
+- **Clustering**: Group similar documents together
+- **Recommendations**: Suggest similar items based on content
+- **RAG Systems**: Retrieve relevant context for LLM prompts
+
+## Next Steps
+
+- Learn about [Retrieval](/guides/retrieval) for RAG applications
+- Explore vector stores in the [Integrations](/integrations/vectorstores) docs
+- Build semantic search with [Retrievers](/api-reference/retrievers)

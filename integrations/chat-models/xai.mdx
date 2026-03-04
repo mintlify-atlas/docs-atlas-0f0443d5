@@ -1,0 +1,127 @@
+---
+title: xAI
+---
+
+This integration connects xAI's Grok models to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-xai
+```
+
+## Setup
+
+Set your xAI API key as an environment variable:
+
+```bash
+export XAI_API_KEY="your-api-key"
+```
+
+Get your API key from [console.x.ai](https://console.x.ai).
+
+## Usage
+
+```python
+from langchain_xai import ChatXAI
+
+model = ChatXAI(
+    model="grok-4",
+    temperature=0,
+    max_tokens=None,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatXAI
+
+`ChatXAI` extends `ChatOpenAI` and inherits all of its parameters. It's preconfigured to use xAI's API endpoint.
+
+<ParamField path="model" type="str" required>
+  Name of xAI model to use (e.g., `grok-4`, `grok-3.5`, `grok-vision-beta`).
+</ParamField>
+
+<ParamField path="temperature" type="float" default="1">
+  Sampling temperature between 0 and 2. Higher values mean more random completions, lower values (like 0.2) mean more focused and deterministic completions.
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate. Refer to your model's documentation for limits.
+</ParamField>
+
+<ParamField path="logprobs" type="bool | None" default="None">
+  Whether to return log probabilities of output tokens.
+</ParamField>
+
+<ParamField path="timeout" type="float | None" default="None">
+  Timeout for requests in seconds.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="2">
+  Maximum number of retries for failed requests.
+</ParamField>
+
+<ParamField path="api_key" type="str | None" default="None">
+  xAI API key. If not provided, reads from `XAI_API_KEY` environment variable.
+</ParamField>
+
+## Supported Models
+
+- **Grok-4**: Latest flagship model with advanced capabilities
+- **Grok-3.5**: Balanced performance and speed
+- **Grok Vision Beta**: Multimodal model with vision capabilities
+
+See [docs.x.ai/docs/models](https://docs.x.ai/docs/models) for the latest model availability and pricing.
+
+## Features
+
+- Text generation
+- Function/tool calling
+- Vision capabilities (Grok Vision Beta)
+- Streaming
+- Async support
+- Real-time information access (via X/Twitter)
+
+<Note>
+  Grok models have unique access to real-time information from X (formerly Twitter), which can be useful for current events and trending topics. Refer to [xAI's documentation](https://docs.x.ai/docs/api-reference#chat-completions) for API details.
+</Note>
+
+## Vision Example
+
+For models with vision capabilities:
+
+```python
+from langchain_xai import ChatXAI
+from langchain_core.messages import HumanMessage
+
+model = ChatXAI(model="grok-vision-beta")
+
+message = HumanMessage(
+    content=[
+        {"type": "text", "text": "What's in this image?"},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/image.jpg"},
+        },
+    ],
+)
+
+response = model.invoke([message])
+print(response.content)
+```

@@ -1,0 +1,578 @@
+---
+title: Runnables and LCEL
+description: Understanding the Runnable protocol and LangChain Expression Language for composable AI applications
+---
+
+Runnables are the foundational building blocks of LangChain, providing a universal protocol for creating composable, production-ready AI applications. The LangChain Expression Language (LCEL) enables declarative composition of these components.
+
+## The Runnable Protocol
+
+Every component in LangChain implements the `Runnable` protocol, defined in `/libs/core/langchain_core/runnables/base.py:124`:
+
+```python
+from langchain_core.runnables import Runnable
+from typing import Generic, TypeVar
+
+Input = TypeVar("Input")
+Output = TypeVar("Output")
+
+class Runnable(Generic[Input, Output]):
+    """A unit of work that can be invoked, batched, streamed, and composed."""
+    
+    def invoke(self, input: Input, config: RunnableConfig | None = None) -> Output:
+        """Transform a single input into an output."""
+    
+    def batch(self, inputs: list[Input], config: RunnableConfig | None = None) -> list[Output]:
+        """Efficiently transform multiple inputs into outputs."""
+    
+    def stream(self, input: Input, config: RunnableConfig | None = None) -> Iterator[Output]:
+        """Stream output from a single input as it's produced."""
+```
+
+<Note>
+All Runnables automatically support both synchronous and asynchronous execution. Methods prefixed with `a` (e.g., `ainvoke`, `astream`, `abatch`) provide async variants.
+</Note>
+
+## Core Invocation Methods
+
+Every Runnable exposes four primary invocation patterns:
+
+### invoke / ainvoke
+
+Transform a single input into an output:
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+
+# Synchronous
+response = model.invoke("What is LangChain?")
+print(response.content)
+
+# Asynchronous
+response = await model.ainvoke("What is LangChain?")
+print(response.content)
+```
+
+### stream / astream
+
+Stream output as it's generated:
+
+```python
+for chunk in model.stream("Tell me a story"):
+    print(chunk.content, end="", flush=True)
+
+# Async streaming
+async for chunk in model.astream("Tell me a story"):
+    print(chunk.content, end="", flush=True)
+```
+
+### batch / abatch
+
+Process multiple inputs efficiently:
+
+```python
+questions = [
+    "What is AI?",
+    "What is ML?",
+    "What is DL?"
+]
+
+# Batch processing
+responses = model.batch(questions)
+for response in responses:
+    print(response.content)
+
+# Async batch
+responses = await model.abatch(questions)
+```
+
+<Tip>
+By default, `batch` runs `invoke()` in parallel using a thread pool executor. Override the `batch` method to implement provider-specific batch APIs for better performance.
+</Tip>
+
+### astream_events
+
+Stream intermediate results and events:
+
+```python
+async for event in chain.astream_events(input, version="v2"):
+    kind = event["event"]
+    if kind == "on_chat_model_stream":
+        print(event["data"]["chunk"].content, end="")
+```
+
+## Composition Primitives
+
+LCEL provides two fundamental composition patterns:
+
+### RunnableSequence (Sequential)
+
+Chain components where each output feeds the next input. Create using the `|` pipe operator:
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
+
+prompt = ChatPromptTemplate.from_template("Tell me a joke about {topic}")
+model = ChatOpenAI()
+output_parser = StrOutputParser()
+
+# Sequential composition using pipe operator
+chain = prompt | model | output_parser
+
+# Invoke the entire chain
+result = chain.invoke({"topic": "programming"})
+print(result)  # "Why do programmers..."
+```
+
+Alternatively, use explicit construction:
+
+```python
+from langchain_core.runnables import RunnableSequence
+
+chain = RunnableSequence(
+    prompt,
+    model,
+    output_parser
+)
+```
+
+Defined in `/libs/core/langchain_core/runnables/base.py:162`
+
+### RunnableParallel (Concurrent)
+
+Invoke multiple runnables concurrently with the same input. Create using dict literals:
+
+```python
+from langchain_core.runnables import RunnableParallel, RunnableLambda
+
+# Parallel execution using dict literal
+chain = RunnableParallel(
+    mul_2=RunnableLambda(lambda x: x * 2),
+    mul_5=RunnableLambda(lambda x: x * 5),
+    add_10=RunnableLambda(lambda x: x + 10)
+)
+
+result = chain.invoke(3)
+print(result)  # {"mul_2": 6, "mul_5": 15, "add_10": 13}
+```
+
+Or inline within a sequence:
+
+```python
+from operator import itemgetter
+
+chain = (
+    RunnableLambda(lambda x: x + 1)
+    | {
+        "mul_2": RunnableLambda(lambda x: x * 2),
+        "mul_5": RunnableLambda(lambda x: x * 5),
+    }
+    | RunnableLambda(lambda x: x["mul_2"] + x["mul_5"])
+)
+
+result = chain.invoke(1)  # (1+1)*2 + (1+1)*5 = 4 + 10 = 14
+```
+
+Defined in `/libs/core/langchain_core/runnables/base.py:166`
+
+## Built-in Runnable Types
+
+LangChain provides several ready-to-use Runnable implementations:
+
+### RunnableLambda
+
+Wrap arbitrary functions:
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+def process_text(text: str) -> str:
+    return text.upper().strip()
+
+runnable = RunnableLambda(process_text)
+result = runnable.invoke("  hello world  ")  # "HELLO WORLD"
+```
+
+### RunnablePassthrough
+
+Pass input through unchanged or with modifications:
+
+```python
+from langchain_core.runnables import RunnablePassthrough
+
+# Pass through unchanged
+passthrough = RunnablePassthrough()
+passthrough.invoke("hello")  # "hello"
+
+# Pass through with assignments
+chain = (
+    RunnablePassthrough.assign(
+        processed=lambda x: x["text"].upper()
+    )
+)
+
+result = chain.invoke({"text": "hello"})
+print(result)  # {"text": "hello", "processed": "HELLO"}
+```
+
+### RunnablePick
+
+Extract specific keys from dict output:
+
+```python
+from langchain_core.runnables import RunnableParallel, RunnableLambda
+
+chain = RunnableParallel(
+    a=RunnableLambda(lambda x: x * 2),
+    b=RunnableLambda(lambda x: x * 3),
+    c=RunnableLambda(lambda x: x * 4)
+)
+
+# Pick only specific keys
+chain_filtered = chain.pick(["a", "c"])
+result = chain_filtered.invoke(5)  # {"a": 10, "c": 20}
+```
+
+### RunnableBranch
+
+Conditional routing based on input:
+
+```python
+from langchain_core.runnables import RunnableBranch, RunnableLambda
+
+branch = RunnableBranch(
+    (lambda x: x < 0, RunnableLambda(lambda x: "negative")),
+    (lambda x: x == 0, RunnableLambda(lambda x: "zero")),
+    RunnableLambda(lambda x: "positive")  # default
+)
+
+print(branch.invoke(-5))  # "negative"
+print(branch.invoke(0))   # "zero"
+print(branch.invoke(10))  # "positive"
+```
+
+### RunnableWithFallbacks
+
+Provide fallback behavior on errors:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+
+primary = ChatOpenAI(model="gpt-4")
+fallback = ChatAnthropic(model="claude-3-sonnet-20240229")
+
+chain = primary.with_fallbacks([fallback])
+
+# Will use fallback if primary fails
+response = chain.invoke("Hello")
+```
+
+## Advanced Composition Patterns
+
+### assign() - Add New Fields
+
+Add computed fields to dict outputs:
+
+```python
+from operator import itemgetter
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+prompt = ChatPromptTemplate.from_template("Summarize: {text}")
+model = ChatOpenAI()
+
+chain = (
+    {"text": RunnablePassthrough()}
+    | RunnablePassthrough.assign(
+        summary=prompt | model | StrOutputParser()
+    )
+)
+
+result = chain.invoke("Long article text...")
+print(result)
+# {"text": "Long article text...", "summary": "Brief summary..."}
+```
+
+See: `/libs/core/langchain_core/runnables/base.py:772`
+
+### pick() - Extract Fields
+
+Simplify dict outputs by selecting specific keys:
+
+```python
+chain = (
+    RunnableParallel(
+        str=RunnableLambda(str),
+        upper=RunnableLambda(lambda x: str(x).upper()),
+        lower=RunnableLambda(lambda x: str(x).lower())
+    )
+    .pick("upper")  # Extract just one field
+)
+
+result = chain.invoke("Hello")  # "HELLO" (not a dict)
+```
+
+See: `/libs/core/langchain_core/runnables/base.py:709`
+
+### map() - Transform Lists
+
+Apply a runnable to each element in a list:
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+upper = RunnableLambda(lambda x: x.upper())
+mapped = upper.map()
+
+result = mapped.invoke(["hello", "world"])
+print(result)  # ["HELLO", "WORLD"]
+```
+
+### with_retry() - Add Retry Logic
+
+Automatically retry on failures:
+
+```python
+import random
+from langchain_core.runnables import RunnableLambda
+
+def flaky_function(x: int) -> int:
+    if random.random() > 0.3:
+        raise ValueError("Random failure")
+    return x * 2
+
+runnable = RunnableLambda(flaky_function).with_retry(
+    stop_after_attempt=5,
+    wait_exponential_jitter=True
+)
+
+result = runnable.invoke(10)  # Will retry up to 5 times
+```
+
+See example in `/libs/core/langchain_core/runnables/base.py:220`
+
+### with_config() - Set Default Config
+
+Bind configuration to a runnable:
+
+```python
+model = ChatOpenAI().with_config(
+    tags=["production"],
+    metadata={"version": "1.0"},
+    max_concurrency=5
+)
+
+result = model.invoke("Hello")  # Uses bound config
+```
+
+## Configuration and Context
+
+Runnables accept optional `RunnableConfig` for execution control:
+
+```python
+from langchain_core.runnables import RunnableConfig
+from langchain_core.callbacks import StdOutCallbackHandler
+
+config = RunnableConfig(
+    tags=["experiment", "v2"],
+    metadata={"user_id": "123", "session": "abc"},
+    callbacks=[StdOutCallbackHandler()],
+    max_concurrency=10,
+    run_name="custom_run"
+)
+
+result = chain.invoke(input, config=config)
+```
+
+Configuration merges across composition:
+
+```python
+# Parent config
+chain.invoke(input, config={"tags": ["parent"]})
+
+# Child automatically inherits and extends
+# Final tags: ["parent", "child"]
+```
+
+See: `/libs/core/langchain_core/runnables/config.py:49`
+
+## Type Safety and Schemas
+
+Runnables expose input/output schemas:
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+prompt = ChatPromptTemplate.from_template("Tell me about {topic}")
+model = ChatOpenAI()
+chain = prompt | model
+
+# Inspect schemas
+print(chain.input_schema.model_json_schema())
+# {"type": "object", "properties": {"topic": {"type": "string"}}}
+
+print(chain.output_schema.model_json_schema())
+# Shows AIMessage schema
+```
+
+Access type information:
+
+```python
+print(chain.InputType)   # dict
+print(chain.OutputType)  # AIMessage
+```
+
+See: `/libs/core/langchain_core/runnables/base.py:300`
+
+## Performance Optimizations
+
+### Automatic Parallelization
+
+RunnableParallel executes branches concurrently:
+
+```python
+import time
+from langchain_core.runnables import RunnableLambda
+
+def slow_func(x):
+    time.sleep(2)
+    return x * 2
+
+# Sequential: 6 seconds
+seq = RunnableLambda(slow_func) | RunnableLambda(slow_func) | RunnableLambda(slow_func)
+
+# Parallel: 2 seconds
+par = {
+    "a": RunnableLambda(slow_func),
+    "b": RunnableLambda(slow_func),
+    "c": RunnableLambda(slow_func)
+}
+```
+
+### Batch Optimization
+
+Override `batch()` for provider-specific batch APIs:
+
+```python
+from langchain_core.runnables import Runnable
+
+class BatchOptimizedModel(Runnable[str, str]):
+    def invoke(self, input: str) -> str:
+        return self._call_api([input])[0]
+    
+    def batch(self, inputs: list[str]) -> list[str]:
+        # Use provider's batch API instead of parallel invoke
+        return self._call_api(inputs)
+    
+    def _call_api(self, inputs: list[str]) -> list[str]:
+        # Single API call for all inputs
+        return [f"Response to: {inp}" for inp in inputs]
+```
+
+<Tip>
+The default `batch()` implementation runs `invoke()` in parallel using ThreadPoolExecutor. For APIs with native batch support, override `batch()` for better performance.
+</Tip>
+
+## Debugging and Visualization
+
+### Print Intermediate Steps
+
+Enable global debugging:
+
+```python
+from langchain_core.globals import set_debug
+
+set_debug(True)
+
+chain = prompt | model
+chain.invoke("Hello")  # Prints all intermediate steps
+```
+
+See: `/libs/core/langchain_core/runnables/base.py:238`
+
+### Custom Callbacks
+
+Inject callbacks for observability:
+
+```python
+from langchain_core.callbacks import StdOutCallbackHandler
+from langchain_core.tracers import ConsoleCallbackHandler
+
+chain.invoke(
+    "Hello",
+    config={"callbacks": [ConsoleCallbackHandler()]}
+)
+```
+
+### Stream Logs
+
+Stream detailed execution logs:
+
+```python
+async for chunk in chain.astream_log("Hello"):
+    print(chunk)
+```
+
+## Best Practices
+
+<Accordion title="When to use LCEL vs custom code">
+**Use LCEL when:**
+- Building standard workflows (prompt → model → parser)
+- You need automatic async/streaming/batch support
+- Composition clarity matters
+- You want built-in tracing and debugging
+
+**Use custom code when:**
+- Complex business logic with many conditionals
+- Performance-critical tight loops
+- Existing code integration
+</Accordion>
+
+<Accordion title="Type hints for better DX">
+Always specify input/output types on custom Runnables:
+
+```python
+class MyRunnable(Runnable[dict[str, str], str]):
+    # IDE autocomplete knows input is dict[str, str]
+    # and output is str
+    pass
+```
+</Accordion>
+
+<Accordion title="Config propagation">
+RunnableConfig automatically merges down the chain. Set global defaults at the root:
+
+```python
+chain = prompt | model | parser
+
+result = chain.invoke(
+    input,
+    config={"tags": ["production"], "callbacks": [handler]}
+)
+# All components receive the same config
+```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Messages" icon="message" href="/concepts/messages">
+    Learn about message types for chat interactions
+  </Card>
+  <Card title="Tools" icon="wrench" href="/concepts/tools">
+    Build tools for agent actions
+  </Card>
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Combine tools and models into agents
+  </Card>
+  <Card title="Architecture" icon="building" href="/concepts/architecture">
+    Understand the framework structure
+  </Card>
+</CardGroup>

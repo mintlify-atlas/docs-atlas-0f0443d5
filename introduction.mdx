@@ -1,0 +1,129 @@
+---
+title: Introduction
+description: Build agents and LLM-powered applications with composable components
+---
+
+# Welcome to LangChain
+
+LangChain is a framework for building agents and LLM-powered applications. It helps you chain together interoperable components and third-party integrations to simplify AI application development – all while future-proofing decisions as the underlying technology evolves.
+
+<CodeGroup>
+```bash pip
+pip install langchain
+```
+
+```bash uv
+uv add langchain
+```
+
+```bash poetry
+poetry add langchain
+```
+</CodeGroup>
+
+## Why use LangChain?
+
+LangChain helps developers build applications powered by LLMs through a standard interface for models, embeddings, vector stores, and more.
+
+<CardGroup cols={2}>
+  <Card title="Real-time data augmentation" icon="database">
+    Connect LLMs to diverse data sources and external systems with our vast library of integrations
+  </Card>
+  <Card title="Model interoperability" icon="shuffle">
+    Swap models in and out as the industry evolves - LangChain's abstractions keep you moving
+  </Card>
+  <Card title="Rapid prototyping" icon="bolt">
+    Build and iterate quickly with modular, component-based architecture
+  </Card>
+  <Card title="Production-ready features" icon="shield-check">
+    Deploy with built-in monitoring, evaluation, and debugging through LangSmith
+  </Card>
+  <Card title="Vibrant ecosystem" icon="users">
+    Leverage integrations, templates, and community-contributed components
+  </Card>
+  <Card title="Flexible abstraction layers" icon="layer-group">
+    Work at any level - from high-level chains to low-level components
+  </Card>
+</CardGroup>
+
+## Key features
+
+<AccordionGroup>
+  <Accordion title="Composable components" icon="puzzle-piece">
+    Build LLM applications by composing modular, reusable components. Chain together prompts, models, output parsers, and tools using the LCEL (LangChain Expression Language) syntax.
+  </Accordion>
+
+  <Accordion title="Multi-agent orchestration" icon="sitemap">
+    Create sophisticated agent workflows with LangGraph. Build agents that can plan, use subagents, and handle complex tasks with long-term memory and human-in-the-loop workflows.
+  </Accordion>
+
+  <Accordion title="Extensive integrations" icon="plug">
+    Connect to 100+ model providers including OpenAI, Anthropic, Google, Ollama, and more. Access vector stores, document loaders, and tools through standardized interfaces.
+  </Accordion>
+
+  <Accordion title="Retrieval augmented generation" icon="magnifying-glass">
+    Build RAG applications with built-in support for document loading, text splitting, embeddings, vector stores, and retrieval patterns.
+  </Accordion>
+
+  <Accordion title="Streaming and async" icon="signal-stream">
+    Stream responses token-by-token for better user experience. Full async support for concurrent operations and high-throughput applications.
+  </Accordion>
+
+  <Accordion title="Production monitoring" icon="chart-line">
+    Integrate with LangSmith for debugging, evaluation, and monitoring. Track agent trajectories and improve performance over time.
+  </Accordion>
+</AccordionGroup>
+
+## LangChain ecosystem
+
+While LangChain can be used standalone, it integrates seamlessly with the broader LangChain ecosystem:
+
+<CardGroup cols={2}>
+  <Card title="LangGraph" icon="diagram-project" href="https://docs.langchain.com/oss/python/langgraph/overview">
+    Low-level agent orchestration framework for building controllable, stateful agent workflows
+  </Card>
+  <Card title="Deep Agents" icon="brain" href="https://github.com/langchain-ai/deepagents">
+    Build agents that can plan, use subagents, and leverage file systems for complex tasks
+  </Card>
+  <Card title="LangSmith" icon="microscope" href="https://www.langchain.com/langsmith">
+    Debug, evaluate, and monitor LLM applications. Gain visibility into production performance
+  </Card>
+  <Card title="LangSmith Deployment" icon="server" href="https://docs.langchain.com/langsmith/deployments">
+    Deploy and scale agents with a purpose-built platform for stateful workflows
+  </Card>
+</CardGroup>
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first LLM application in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install LangChain and configure dependencies
+  </Card>
+  <Card title="Core concepts" icon="book" href="/concepts/architecture">
+    Understand the framework architecture and key abstractions
+  </Card>
+  <Card title="Integrations" icon="plug" href="/integrations/overview">
+    Explore available model providers and tools
+  </Card>
+</CardGroup>
+
+## Community and support
+
+<CardGroup cols={3}>
+  <Card title="GitHub" icon="github" href="https://github.com/langchain-ai/langchain">
+    Star us on GitHub and contribute to the project
+  </Card>
+  <Card title="Forum" icon="comments" href="https://forum.langchain.com">
+    Connect with the community and ask questions
+  </Card>
+  <Card title="Twitter" icon="x-twitter" href="https://x.com/LangChain">
+    Follow us for updates and announcements
+  </Card>
+</CardGroup>
+
+<Note>
+  Looking for the JavaScript/TypeScript version? Check out [LangChain.js](https://github.com/langchain-ai/langchainjs).
+</Note>

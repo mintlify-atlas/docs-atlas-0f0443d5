@@ -1,0 +1,114 @@
+---
+title: Tools
+description: Tool definitions and runtime utilities
+---
+
+## tool
+
+```python
+@tool
+def my_tool(arg1: str, arg2: int) -> str:
+    """Tool description here."""
+    return f"Result: {arg1} {arg2}"
+```
+
+Decorator for creating tools from functions. Re-exported from `langchain_core.tools`.
+
+See the [LangChain Core documentation](https://api.python.langchain.com/en/latest/tools/langchain_core.tools.convert.tool.html) for the full API reference.
+
+## BaseTool
+
+```python
+from langchain_core.tools import BaseTool
+```
+
+The base class for all tools in LangChain. Re-exported from `langchain_core.tools`.
+
+See the [LangChain Core documentation](https://api.python.langchain.com/en/latest/tools/langchain_core.tools.base.BaseTool.html) for the full API reference.
+
+## ToolRuntime
+
+```python
+from langchain.tools import ToolRuntime
+```
+
+Runtime utilities for tool execution. Re-exported from `langgraph.prebuilt`.
+
+Provides access to runtime context and state during tool execution.
+
+## InjectedState
+
+```python
+from langchain.tools import InjectedState
+from typing import Annotated
+
+def my_tool(state: Annotated[dict, InjectedState]) -> str:
+    """Tool that accesses agent state."""
+    messages = state["messages"]
+    return f"Processed {len(messages)} messages"
+```
+
+Type annotation for injecting agent state into tool parameters. Re-exported from `langgraph.prebuilt`.
+
+When used with `Annotated`, the parameter will automatically receive the current agent state without requiring it to be passed explicitly by the model.
+
+## InjectedStore
+
+```python
+from langchain.tools import InjectedStore
+from typing import Annotated
+from langgraph.store.base import BaseStore
+
+def my_tool(store: Annotated[BaseStore, InjectedStore]) -> str:
+    """Tool that accesses the agent store."""
+    # Access persistent storage across threads
+    data = store.get("namespace", "key")
+    return f"Retrieved: {data}"
+```
+
+Type annotation for injecting the agent store into tool parameters. Re-exported from `langgraph.prebuilt`.
+
+When used with `Annotated`, the parameter will automatically receive the store instance without requiring it to be passed explicitly by the model.
+
+## InjectedToolArg
+
+```python
+from langchain_core.tools import InjectedToolArg
+```
+
+Base class for creating custom injected tool arguments. Re-exported from `langchain_core.tools`.
+
+See the [LangChain Core documentation](https://api.python.langchain.com/en/latest/tools/langchain_core.tools.base.InjectedToolArg.html) for the full API reference.
+
+## InjectedToolCallId
+
+```python
+from langchain_core.tools import InjectedToolCallId
+from typing import Annotated
+
+def my_tool(call_id: Annotated[str, InjectedToolCallId()]) -> str:
+    """Tool that accesses its own call ID."""
+    return f"Called with ID: {call_id}"
+```
+
+Type annotation for injecting the tool call ID into tool parameters. Re-exported from `langchain_core.tools`.
+
+When used with `Annotated`, the parameter will automatically receive the unique identifier for this specific tool invocation.
+
+## ToolException
+
+```python
+from langchain_core.tools import ToolException
+
+def my_tool(value: int) -> int:
+    """Tool that may raise an exception."""
+    if value < 0:
+        raise ToolException("Value must be non-negative")
+    return value * 2
+```
+
+Exception class for tool execution errors. Re-exported from `langchain_core.tools`.
+
+Raising this exception in a tool will cause the error message to be returned to the model as a `ToolMessage` rather than stopping execution.
+
+See the [LangChain Core documentation](https://api.python.langchain.com/en/latest/tools/langchain_core.tools.base.ToolException.html) for the full API reference.

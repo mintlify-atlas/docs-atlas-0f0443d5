@@ -1,0 +1,114 @@
+---
+title: Fireworks
+---
+
+This integration connects Fireworks AI's fast inference platform to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-fireworks
+```
+
+## Setup
+
+Set your Fireworks API key as an environment variable:
+
+```bash
+export FIREWORKS_API_KEY="your-api-key"
+```
+
+Get your API key from [fireworks.ai](https://fireworks.ai).
+
+## Usage
+
+```python
+from langchain_fireworks import ChatFireworks
+
+model = ChatFireworks(
+    model="accounts/fireworks/models/llama-v3p3-70b-instruct",
+    temperature=0,
+    max_tokens=None,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatFireworks
+
+<ParamField path="model" type="str" required>
+  Model name to use (e.g., `accounts/fireworks/models/llama-v3p3-70b-instruct`).
+</ParamField>
+
+<ParamField path="temperature" type="float | None" default="None">
+  Sampling temperature. Controls randomness in generation.
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="timeout" type="float | tuple[float, float] | None" default="None">
+  Timeout for requests to Fireworks completion API.
+</ParamField>
+
+<ParamField path="api_key" type="str" required>
+  Fireworks API key. Automatically read from `FIREWORKS_API_KEY` environment variable if not provided.
+</ParamField>
+
+<ParamField path="base_url" type="str | None" default="None">
+  Base URL path for API requests. Leave blank unless using a proxy or service emulator. Reads from `FIREWORKS_API_BASE` if not provided.
+</ParamField>
+
+<ParamField path="streaming" type="bool" default="False">
+  Whether to stream the results or not.
+</ParamField>
+
+<ParamField path="n" type="int" default="1">
+  Number of chat completions to generate for each prompt.
+</ParamField>
+
+<ParamField path="model_kwargs" type="dict" default="{}">
+  Additional model parameters valid for create call not explicitly specified.
+</ParamField>
+
+## Supported Models
+
+Fireworks hosts a wide variety of open-source models:
+
+- **Llama 3.3 70B**: Meta's latest high-performance model
+- **Mixtral MoE 8x22B**: Large mixture-of-experts model
+- **Qwen 2.5**: Alibaba's multilingual models
+- **DeepSeek**: Reasoning and chat models
+- **Gemma 2**: Google's efficient models
+
+See [fireworks.ai/models](https://fireworks.ai/models) for the full catalog.
+
+## Features
+
+- Fast inference with optimized serving
+- Function/tool calling
+- JSON mode
+- Streaming
+- Async support
+- Fine-tuning support
+- Custom model deployment
+
+<Note>
+  Fireworks AI specializes in fast, cost-effective inference for open-source models. They offer competitive pricing and support for custom fine-tuned models.
+</Note>

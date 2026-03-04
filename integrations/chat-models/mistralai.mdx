@@ -1,0 +1,128 @@
+---
+title: Mistral AI
+---
+
+This integration connects Mistral AI's models to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-mistralai
+```
+
+## Setup
+
+Set your Mistral API key as an environment variable:
+
+```bash
+export MISTRAL_API_KEY="your-api-key"
+```
+
+Get your API key from [console.mistral.ai](https://console.mistral.ai).
+
+## Usage
+
+```python
+from langchain_mistralai import ChatMistralAI
+
+model = ChatMistralAI(
+    model="mistral-large-latest",
+    temperature=0,
+    max_tokens=None,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatMistralAI
+
+<ParamField path="model" type="str" default="mistral-small">
+  Model name to use (e.g., `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`).
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.7">
+  Sampling temperature. Controls randomness in generation.
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="top_p" type="float" default="1">
+  Nucleus sampling parameter. Considers the smallest set of tokens whose probability sum is at least `top_p`. Must be in `[0.0, 1.0]`.
+</ParamField>
+
+<ParamField path="random_seed" type="int | None" default="None">
+  Random seed for reproducible generation.
+</ParamField>
+
+<ParamField path="safe_mode" type="bool | None" default="None">
+  Whether to inject a safety prompt before all conversations.
+</ParamField>
+
+<ParamField path="timeout" type="int" default="120">
+  Timeout for requests in seconds.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="5">
+  Maximum number of retries for failed requests.
+</ParamField>
+
+<ParamField path="max_concurrent_requests" type="int" default="64">
+  Maximum number of concurrent requests.
+</ParamField>
+
+<ParamField path="api_key" type="SecretStr | None" default="None">
+  Mistral API key. Automatically read from `MISTRAL_API_KEY` environment variable if not provided.
+</ParamField>
+
+<ParamField path="base_url" type="str | None" default="None">
+  Base URL for API endpoint. Only specify if using a proxy or custom endpoint.
+</ParamField>
+
+<ParamField path="streaming" type="bool" default="False">
+  Whether to stream the results or not.
+</ParamField>
+
+<ParamField path="model_kwargs" type="dict" default="{}">
+  Additional model parameters not explicitly specified.
+</ParamField>
+
+## Supported Models
+
+- **Mistral Large**: Most capable model for complex tasks
+- **Mistral Small**: Fast, cost-effective model for simpler tasks
+- **Codestral**: Specialized for code generation
+- **Mixtral 8x7B**: Open-source mixture-of-experts model
+- **Mixtral 8x22B**: Larger MoE model
+
+See [docs.mistral.ai/getting-started/models](https://docs.mistral.ai/getting-started/models/) for the latest models.
+
+## Features
+
+- Text generation
+- Function/tool calling
+- JSON mode
+- Streaming
+- Async support
+- Safe mode for content filtering
+- Fine-tuning support
+
+<Note>
+  Mistral AI offers both proprietary models (Mistral Large/Small) and open-source models (Mixtral series). The open-source models can also be self-hosted.
+</Note>

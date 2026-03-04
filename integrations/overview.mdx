@@ -1,0 +1,216 @@
+---
+title: "Integrations Overview"
+description: "Explore LangChain's ecosystem of integrations for chat models, embeddings, vector stores, and tools"
+---
+
+## Introduction
+
+LangChain provides a rich ecosystem of integrations through partner packages that connect your applications to popular AI services and tools. Each integration is distributed as a standalone package, giving you flexibility to install only what you need.
+
+## How integrations work
+
+LangChain integrations are built on standardized abstractions from `langchain-core`, ensuring consistent interfaces across different providers. This means you can:
+
+- **Switch providers easily**: Change from OpenAI to Anthropic with minimal code changes
+- **Mix and match**: Use embeddings from one provider with chat models from another
+- **Install selectively**: Only install the integrations you need for your project
+
+## Installation patterns
+
+Partner packages follow a consistent naming convention: `langchain-{provider}`. Install them using pip:
+
+```bash
+# Install a single integration
+pip install langchain-openai
+
+# Install multiple integrations
+pip install langchain-openai langchain-anthropic langchain-chroma
+```
+
+Each package is independently versioned and maintained, allowing you to update integrations without affecting your entire LangChain installation.
+
+## Available integrations
+
+### Chat Models
+
+Chat models provide conversational AI capabilities from leading providers. These integrations support features like streaming, function calling, and vision where available.
+
+<CardGroup cols={2}>
+  <Card title="OpenAI" icon="comments" href="/integrations/providers/openai">
+    GPT-4, GPT-3.5, and other OpenAI models with tool calling and vision support
+  </Card>
+  
+  <Card title="Anthropic" icon="brain" href="/integrations/providers/anthropic">
+    Claude models with extended context windows and advanced reasoning
+  </Card>
+  
+  <Card title="Ollama" icon="server" href="/integrations/providers/ollama">
+    Run open-source models locally with Llama, Mistral, and more
+  </Card>
+  
+  <Card title="Groq" icon="bolt" href="/integrations/providers/groq">
+    Ultra-fast inference with Llama and Mixtral models
+  </Card>
+  
+  <Card title="Fireworks" icon="fire" href="/integrations/providers/fireworks">
+    High-performance inference for open-source models
+  </Card>
+  
+  <Card title="DeepSeek" icon="magnifying-glass" href="/integrations/providers/deepseek">
+    Powerful reasoning and coding models
+  </Card>
+  
+  <Card title="Mistral AI" icon="wind" href="/integrations/providers/mistralai">
+    Mistral and Mixtral models with function calling
+  </Card>
+  
+  <Card title="OpenRouter" icon="route" href="/integrations/providers/openrouter">
+    Access to multiple model providers through a unified API
+  </Card>
+  
+  <Card title="Perplexity" icon="sparkles" href="/integrations/providers/perplexity">
+    Online models with real-time web search capabilities
+  </Card>
+  
+  <Card title="xAI" icon="x" href="/integrations/providers/xai">
+    Grok models from xAI
+  </Card>
+</CardGroup>
+
+### Embeddings
+
+Embeddings models convert text into vector representations for semantic search and retrieval.
+
+<CardGroup cols={2}>
+  <Card title="OpenAI Embeddings" icon="vector-square" href="/integrations/providers/openai#embeddings">
+    Industry-standard text-embedding-3 models for semantic search
+  </Card>
+  
+  <Card title="HuggingFace" icon="face-smile" href="/integrations/providers/huggingface">
+    Access thousands of open-source embedding models
+  </Card>
+  
+  <Card title="Nomic" icon="map" href="/integrations/providers/nomic">
+    High-quality embeddings optimized for retrieval tasks
+  </Card>
+</CardGroup>
+
+### Vector Stores
+
+Vector stores enable efficient similarity search and retrieval of embedded documents.
+
+<CardGroup cols={2}>
+  <Card title="Chroma" icon="database" href="/integrations/providers/chroma">
+    Open-source embedding database for AI applications
+  </Card>
+  
+  <Card title="Qdrant" icon="server" href="/integrations/providers/qdrant">
+    High-performance vector search engine with advanced filtering
+  </Card>
+</CardGroup>
+
+### Tools
+
+Tools extend your AI applications with external capabilities like search, data retrieval, and API interactions.
+
+<CardGroup cols={2}>
+  <Card title="Exa Search" icon="magnifying-glass" href="/integrations/providers/exa">
+    Neural search engine for finding high-quality web content
+  </Card>
+</CardGroup>
+
+## Using integrations in your code
+
+Here's a typical pattern for using LangChain integrations:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+# Initialize a chat model
+llm = ChatOpenAI(model="gpt-4")
+
+# Or switch to a different provider
+# llm = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+
+# Set up embeddings and vector store
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+vector_store = Chroma(embedding_function=embeddings)
+
+# Use them together
+response = llm.invoke("What can you help me with?")
+```
+
+## Authentication
+
+Most integrations require API keys for authentication. Set them as environment variables:
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="your-api-key"
+
+# Anthropic
+export ANTHROPIC_API_KEY="your-api-key"
+
+# HuggingFace
+export HUGGINGFACEHUB_API_KEY="your-api-key"
+
+# Exa
+export EXA_API_KEY="your-api-key"
+```
+
+Alternatively, pass API keys directly when initializing:
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(api_key="your-api-key", model="gpt-4")
+```
+
+<Warning>
+Never commit API keys to version control. Use environment variables or secure secret management systems.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Explore providers" icon="compass" href="/integrations/providers/openai">
+    Dive into detailed guides for each integration
+  </Card>
+  
+  <Card title="Build with LangChain" icon="hammer" href="/quickstart">
+    Start building AI applications with these integrations
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="https://reference.langchain.com/python/integrations">
+    View complete API documentation for all integrations
+  </Card>
+  
+  <Card title="Contributing" icon="code-pull-request" href="https://docs.langchain.com/oss/python/contributing/overview">
+    Learn how to contribute new integrations or improve existing ones
+  </Card>
+</CardGroup>
+
+## Package reference
+
+All LangChain partner packages are available on PyPI and follow semantic versioning:
+
+| Package | Description | PyPI |
+|---------|-------------|------|
+| `langchain-openai` | OpenAI models and embeddings | [PyPI](https://pypi.org/project/langchain-openai/) |
+| `langchain-anthropic` | Anthropic (Claude) integration | [PyPI](https://pypi.org/project/langchain-anthropic/) |
+| `langchain-ollama` | Local model support via Ollama | [PyPI](https://pypi.org/project/langchain-ollama/) |
+| `langchain-groq` | Groq inference engine | [PyPI](https://pypi.org/project/langchain-groq/) |
+| `langchain-fireworks` | Fireworks AI models | [PyPI](https://pypi.org/project/langchain-fireworks/) |
+| `langchain-deepseek` | DeepSeek models | [PyPI](https://pypi.org/project/langchain-deepseek/) |
+| `langchain-mistralai` | Mistral AI models | [PyPI](https://pypi.org/project/langchain-mistralai/) |
+| `langchain-openrouter` | OpenRouter unified API | [PyPI](https://pypi.org/project/langchain-openrouter/) |
+| `langchain-perplexity` | Perplexity online models | [PyPI](https://pypi.org/project/langchain-perplexity/) |
+| `langchain-huggingface` | HuggingFace models and embeddings | [PyPI](https://pypi.org/project/langchain-huggingface/) |
+| `langchain-nomic` | Nomic embeddings | [PyPI](https://pypi.org/project/langchain-nomic/) |
+| `langchain-chroma` | Chroma vector database | [PyPI](https://pypi.org/project/langchain-chroma/) |
+| `langchain-qdrant` | Qdrant vector database | [PyPI](https://pypi.org/project/langchain-qdrant/) |
+| `langchain-exa` | Exa search integration | [PyPI](https://pypi.org/project/langchain-exa/) |
+| `langchain-xai` | xAI (Grok) models | [PyPI](https://pypi.org/project/langchain-xai/) |

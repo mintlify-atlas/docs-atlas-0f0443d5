@@ -1,0 +1,494 @@
+---
+title: Runnables
+description: Base classes for building composable LangChain components
+---
+
+## Overview
+
+Runnables are the foundation of LangChain's composable architecture. Every component that can be invoked, streamed, or batched implements the `Runnable` interface.
+
+## Runnable
+
+Base abstract class for units of work that can be invoked, batched, streamed, transformed and composed.
+
+**Source:** `langchain_core.runnables.base:124`
+
+### Type Parameters
+
+<ParamField path="Input" type="TypeVar">
+  The input type for the runnable
+</ParamField>
+
+<ParamField path="Output" type="TypeVar">
+  The output type for the runnable
+</ParamField>
+
+### Properties
+
+<ResponseField name="name" type="str | None">
+  The name of the runnable. Used for debugging and tracing.
+</ResponseField>
+
+<ResponseField name="InputType" type="type[Input]">
+  Input type as a type annotation. Inferred from generic parameterization.
+</ResponseField>
+
+<ResponseField name="OutputType" type="type[Output]">
+  Output type as a type annotation. Inferred from generic parameterization.
+</ResponseField>
+
+<ResponseField name="input_schema" type="type[BaseModel]">
+  The input type specified as a Pydantic model.
+</ResponseField>
+
+<ResponseField name="output_schema" type="type[BaseModel]">
+  The output type specified as a Pydantic model.
+</ResponseField>
+
+<ResponseField name="config_specs" type="list[ConfigurableFieldSpec]">
+  List of configurable fields for this runnable.
+</ResponseField>
+
+### Core Methods
+
+#### invoke
+
+```python
+def invoke(
+    self,
+    input: Input,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> Output
+```
+
+Transform a single input into an output.
+
+<ParamField path="input" type="Input" required>
+  The input to the runnable
+</ParamField>
+
+<ParamField path="config" type="RunnableConfig | None">
+  Configuration for execution, tags, metadata, callbacks
+</ParamField>
+
+<ParamField path="**kwargs" type="Any">
+  Additional arguments passed to the runnable
+</ParamField>
+
+<ResponseField name="return" type="Output">
+  The output of the runnable
+</ResponseField>
+
+#### ainvoke
+
+```python
+async def ainvoke(
+    self,
+    input: Input,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> Output
+```
+
+Asynchronous version of `invoke`. By default, runs sync version in thread pool.
+
+#### batch
+
+```python
+def batch(
+    self,
+    inputs: list[Input],
+    config: RunnableConfig | list[RunnableConfig] | None = None,
+    *,
+    return_exceptions: bool = False,
+    **kwargs: Any
+) -> list[Output]
+```
+
+Efficiently transform multiple inputs into outputs.
+
+<ParamField path="inputs" type="list[Input]" required>
+  List of inputs to process
+</ParamField>
+
+<ParamField path="config" type="RunnableConfig | list[RunnableConfig] | None">
+  Configuration for each input. Can be single config or list matching inputs.
+</ParamField>
+
+<ParamField path="return_exceptions" type="bool" default="False">
+  If `True`, returns exceptions instead of raising them
+</ParamField>
+
+<ResponseField name="return" type="list[Output]">
+  List of outputs corresponding to inputs
+</ResponseField>
+
+#### abatch
+
+```python
+async def abatch(
+    self,
+    inputs: list[Input],
+    config: RunnableConfig | list[RunnableConfig] | None = None,
+    *,
+    return_exceptions: bool = False,
+    **kwargs: Any
+) -> list[Output]
+```
+
+Async version of `batch`.
+
+#### stream
+
+```python
+def stream(
+    self,
+    input: Input,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> Iterator[Output]
+```
+
+Stream output from a single input as it's produced.
+
+<ResponseField name="return" type="Iterator[Output]">
+  Iterator yielding output chunks
+</ResponseField>
+
+#### astream
+
+```python
+async def astream(
+    self,
+    input: Input,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> AsyncIterator[Output]
+```
+
+Async version of `stream`.
+
+### Composition Methods
+
+#### Pipe operator (`|`)
+
+```python
+def __or__(self, other: Runnable[Output, Other]) -> RunnableSequence[Input, Other]
+```
+
+Compose this runnable with another to create a sequence.
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+sequence = RunnableLambda(lambda x: x + 1) | RunnableLambda(lambda x: x * 2)
+sequence.invoke(5)  # 12
+```
+
+### Transformation Methods
+
+#### with_retry
+
+```python
+def with_retry(
+    self,
+    *,
+    retry_if_exception_type: tuple[type[BaseException], ...] = (Exception,),
+    wait_exponential_jitter: bool = True,
+    stop_after_attempt: int = 3
+) -> RunnableRetry[Input, Output]
+```
+
+Create a new runnable that retries on failure.
+
+<ParamField path="retry_if_exception_type" type="tuple[type[BaseException], ...]">
+  Exception types to retry on
+</ParamField>
+
+<ParamField path="wait_exponential_jitter" type="bool" default="True">
+  Use exponential backoff with jitter
+</ParamField>
+
+<ParamField path="stop_after_attempt" type="int" default="3">
+  Maximum number of retry attempts
+</ParamField>
+
+#### with_fallbacks
+
+```python
+def with_fallbacks(
+    self,
+    fallbacks: Sequence[Runnable[Input, Output]],
+    *,
+    exceptions_to_handle: tuple[type[BaseException], ...] = (Exception,)
+) -> RunnableWithFallbacks[Input, Output]
+```
+
+Create a runnable that falls back to alternative runnables on failure.
+
+<ParamField path="fallbacks" type="Sequence[Runnable[Input, Output]]" required>
+  Sequence of fallback runnables to try in order
+</ParamField>
+
+<ParamField path="exceptions_to_handle" type="tuple[type[BaseException], ...]">
+  Exception types that trigger fallback
+</ParamField>
+
+#### with_config
+
+```python
+def with_config(
+    self,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> Runnable[Input, Output]
+```
+
+Bind a config to the runnable.
+
+#### configurable_fields
+
+```python
+def configurable_fields(
+    self,
+    **kwargs: ConfigurableField | ConfigurableFieldSingleOption | ConfigurableFieldMultiOption
+) -> RunnableConfigurableFields
+```
+
+Make init args of the runnable configurable at runtime.
+
+#### configurable_alternatives
+
+```python
+def configurable_alternatives(
+    self,
+    which: ConfigurableField,
+    *,
+    default_key: str = "default",
+    **kwargs: Runnable[Input, Output] | Callable[[], Runnable[Input, Output]]
+) -> RunnableConfigurableAlternatives[Input, Output]
+```
+
+Specify alternative runnables which can be swapped at runtime.
+
+### Schema Methods
+
+#### get_input_schema
+
+```python
+def get_input_schema(
+    self,
+    config: RunnableConfig | None = None
+) -> type[BaseModel]
+```
+
+Get a Pydantic model for validating input.
+
+#### get_output_schema
+
+```python
+def get_output_schema(
+    self,
+    config: RunnableConfig | None = None
+) -> type[BaseModel]
+```
+
+Get a Pydantic model for validating output.
+
+#### get_input_jsonschema
+
+```python
+def get_input_jsonschema(
+    self,
+    config: RunnableConfig | None = None
+) -> dict[str, Any]
+```
+
+Get JSON schema representing the input.
+
+#### get_output_jsonschema
+
+```python
+def get_output_jsonschema(
+    self,
+    config: RunnableConfig | None = None
+) -> dict[str, Any]
+```
+
+Get JSON schema representing the output.
+
+#### config_schema
+
+```python
+def config_schema(
+    self,
+    *,
+    include: Sequence[str] | None = None
+) -> type[BaseModel]
+```
+
+Get Pydantic model representing the config.
+
+### Graph Methods
+
+#### get_graph
+
+```python
+def get_graph(
+    self,
+    config: RunnableConfig | None = None
+) -> Graph
+```
+
+Return a graph representation of this runnable.
+
+#### get_name
+
+```python
+def get_name(
+    self,
+    suffix: str | None = None,
+    *,
+    name: str | None = None
+) -> str
+```
+
+Get the name of the runnable.
+
+<ParamField path="suffix" type="str | None">
+  Optional suffix to append to the name
+</ParamField>
+
+<ParamField path="name" type="str | None">
+  Optional name to use instead of the runnable's name
+</ParamField>
+
+## RunnableSequence
+
+A sequence of runnables where the output of one is the input of the next.
+
+**Source:** `langchain_core.runnables.base`
+
+Created using the `|` operator or by passing a list to `RunnableSequence`.
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+sequence = RunnableLambda(lambda x: x + 1) | RunnableLambda(lambda x: x * 2)
+# or
+from langchain_core.runnables import RunnableSequence
+sequence = RunnableSequence(first=..., middle=[...], last=...)
+```
+
+## RunnableParallel
+
+Invoke runnables concurrently with the same input.
+
+**Source:** `langchain_core.runnables.base`
+
+```python
+from langchain_core.runnables import RunnableLambda, RunnableParallel
+
+parallel = RunnableParallel(
+    doubled=RunnableLambda(lambda x: x * 2),
+    tripled=RunnableLambda(lambda x: x * 3)
+)
+parallel.invoke(5)  # {"doubled": 10, "tripled": 15}
+```
+
+## RunnableLambda
+
+Wrap a callable as a Runnable.
+
+**Source:** `langchain_core.runnables.base`
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+def add_one(x: int) -> int:
+    return x + 1
+
+runnable = RunnableLambda(add_one)
+runnable.invoke(5)  # 6
+```
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    func: Callable[[Input], Output] | Callable[[Input, RunnableConfig], Output],
+    afunc: Callable[[Input], Awaitable[Output]] | None = None
+)
+```
+
+<ParamField path="func" type="Callable" required>
+  Synchronous function to wrap. Can optionally accept `RunnableConfig` as second argument.
+</ParamField>
+
+<ParamField path="afunc" type="Callable | None">
+  Optional async function. If not provided, runs `func` in thread pool.
+</ParamField>
+
+## RunnablePassthrough
+
+Pass inputs unchanged or with additional keys.
+
+**Source:** `langchain_core.runnables.passthrough`
+
+```python
+from langchain_core.runnables import RunnablePassthrough
+
+# Pass through unchanged
+RunnablePassthrough().invoke({"x": 1})  # {"x": 1}
+
+# Assign additional keys
+RunnablePassthrough.assign(y=lambda x: x["x"] * 2).invoke({"x": 1})
+# {"x": 1, "y": 2}
+```
+
+## RunnableConfig
+
+Configuration for runnable execution.
+
+**Source:** `langchain_core.runnables.config`
+
+```python
+class RunnableConfig(TypedDict, total=False):
+    tags: list[str]
+    metadata: dict[str, Any]
+    callbacks: Callbacks
+    run_name: str
+    max_concurrency: int | None
+    recursion_limit: int
+    configurable: dict[str, Any]
+```
+
+<ParamField path="tags" type="list[str]">
+  Tags for tracing and filtering
+</ParamField>
+
+<ParamField path="metadata" type="dict[str, Any]">
+  Metadata for tracing
+</ParamField>
+
+<ParamField path="callbacks" type="Callbacks">
+  Callbacks to invoke during execution
+</ParamField>
+
+<ParamField path="run_name" type="str">
+  Name for the run in tracing
+</ParamField>
+
+<ParamField path="max_concurrency" type="int | None">
+  Maximum number of parallel calls
+</ParamField>
+
+<ParamField path="recursion_limit" type="int">
+  Maximum recursion depth
+</ParamField>
+
+<ParamField path="configurable" type="dict[str, Any]">
+  Runtime configuration for configurable fields
+</ParamField>

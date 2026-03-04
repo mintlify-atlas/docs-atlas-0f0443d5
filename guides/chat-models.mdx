@@ -1,0 +1,410 @@
+---
+title: Working with Chat Models
+description: Learn how to use chat models for conversational AI applications
+---
+
+Chat models are the core interface for working with conversational AI. They take messages as input and return AI-generated messages as output.
+
+## Basic Usage
+
+All LangChain chat models implement a common interface:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
+# Initialize a chat model
+model = ChatOpenAI(model="gpt-4")
+
+# Single message
+response = model.invoke("Tell me a joke")
+print(response.content)
+
+# Multiple messages with system prompt
+messages = [
+    SystemMessage(content="You are a helpful coding assistant."),
+    HumanMessage(content="How do I reverse a list in Python?")
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Message Types
+
+LangChain supports several message types:
+
+<CodeGroup>
+```python System Message
+from langchain_core.messages import SystemMessage
+
+# Set the behavior and context for the AI
+system_msg = SystemMessage(
+    content="You are an expert in Python programming."
+)
+```
+
+```python Human Message
+from langchain_core.messages import HumanMessage
+
+# User input
+human_msg = HumanMessage(
+    content="What are Python decorators?"
+)
+```
+
+```python AI Message
+from langchain_core.messages import AIMessage
+
+# AI response (returned by model or added to history)
+ai_msg = AIMessage(
+    content="Decorators are a way to modify function behavior..."
+)
+```
+
+```python Tool Message
+from langchain_core.messages import ToolMessage
+
+# Result from a tool/function call
+tool_msg = ToolMessage(
+    content="The weather is sunny, 72°F",
+    tool_call_id="call_123"
+)
+```
+</CodeGroup>
+
+## Model Configuration
+
+Configure model parameters to control output:
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(
+    model="gpt-4",
+    temperature=0.7,        # Creativity (0-2, default 1)
+    max_tokens=500,         # Maximum response length
+    timeout=30,             # Request timeout in seconds
+    max_retries=2,          # Number of retries on failure
+    api_key="your-key",     # Or set OPENAI_API_KEY env var
+)
+```
+
+### Temperature Settings
+
+<Tabs>
+  <Tab title="Low (0.0-0.3)">
+    Use for factual, deterministic outputs:
+    ```python
+    model = ChatOpenAI(temperature=0.0)
+    # Good for: code generation, data extraction, factual QA
+    ```
+  </Tab>
+  
+  <Tab title="Medium (0.4-0.7)">
+    Balanced creativity and consistency:
+    ```python
+    model = ChatOpenAI(temperature=0.5)
+    # Good for: general chat, explanations, summaries
+    ```
+  </Tab>
+  
+  <Tab title="High (0.8-1.5)">
+    Maximum creativity:
+    ```python
+    model = ChatOpenAI(temperature=1.0)
+    # Good for: creative writing, brainstorming, diverse outputs
+    ```
+  </Tab>
+</Tabs>
+
+## Multi-Provider Support
+
+Swap between providers easily:
+
+<CodeGroup>
+```python OpenAI
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(
+    model="gpt-4o",
+    api_key="your-openai-key"
+)
+```
+
+```python Anthropic
+from langchain_anthropic import ChatAnthropic
+
+model = ChatAnthropic(
+    model="claude-3-5-sonnet-20241022",
+    api_key="your-anthropic-key"
+)
+```
+
+```python Local (Ollama)
+from langchain_ollama import ChatOllama
+
+model = ChatOllama(
+    model="llama3.2",
+    base_url="http://localhost:11434"
+)
+```
+</CodeGroup>
+
+## Conversation History
+
+Maintain context across multiple turns:
+
+```python
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
+# Initialize conversation with system prompt
+messages = [
+    SystemMessage(content="You are a helpful assistant.")
+]
+
+# First turn
+messages.append(HumanMessage(content="My name is Alice"))
+response = model.invoke(messages)
+messages.append(response)
+
+# Second turn - model remembers context
+messages.append(HumanMessage(content="What's my name?"))
+response = model.invoke(messages)
+print(response.content)  # "Your name is Alice"
+
+# Continue the conversation
+messages.append(response)
+```
+
+## Function/Tool Calling
+
+Chat models can call functions to access external data:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+@tool
+def get_current_weather(location: str) -> str:
+    """Get the current weather for a location.
+    
+    Args:
+        location: The city name.
+    """
+    # Mock implementation
+    return f"Sunny, 72°F in {location}"
+
+# Bind tools to model
+model = ChatOpenAI(model="gpt-4")
+model_with_tools = model.bind_tools([get_current_weather])
+
+# Model will call the tool when appropriate
+response = model_with_tools.invoke(
+    "What's the weather in San Francisco?"
+)
+
+if response.tool_calls:
+    tool_call = response.tool_calls[0]
+    print(f"Tool: {tool_call['name']}")
+    print(f"Args: {tool_call['args']}")
+    # Execute the tool and continue conversation
+```
+
+## Structured Output
+
+Generate structured data using Pydantic models:
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+class Person(BaseModel):
+    """Information about a person."""
+    name: str = Field(description="Person's full name")
+    age: int = Field(description="Person's age in years")
+    occupation: str = Field(description="Person's job or profession")
+
+model = ChatOpenAI(model="gpt-4")
+structured_model = model.with_structured_output(Person)
+
+# Returns a Pydantic model instance
+person = structured_model.invoke(
+    "John Doe is a 35 year old software engineer."
+)
+
+print(person.name)        # "John Doe"
+print(person.age)         # 35
+print(person.occupation)  # "Software Engineer"
+```
+
+### JSON Mode
+
+For flexible JSON output:
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+json_model = model.with_structured_output(method="json_mode")
+
+response = json_model.invoke(
+    "Extract the key entities from: Alice works at Acme Corp in NYC"
+)
+
+print(response)
+# {"person": "Alice", "organization": "Acme Corp", "location": "NYC"}
+```
+
+## Batch Processing
+
+Process multiple inputs efficiently:
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+
+# Batch invoke
+inputs = [
+    "What is 2+2?",
+    "What is the capital of France?",
+    "Who wrote Hamlet?"
+]
+
+responses = model.batch(inputs)
+for response in responses:
+    print(response.content)
+```
+
+## Async Execution
+
+Use async for better performance with concurrent requests:
+
+```python
+import asyncio
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+
+async def process_queries():
+    queries = [
+        "What is Python?",
+        "What is JavaScript?",
+        "What is Rust?"
+    ]
+    
+    # Process all queries concurrently
+    tasks = [model.ainvoke(query) for query in queries]
+    responses = await asyncio.gather(*tasks)
+    
+    for query, response in zip(queries, responses):
+        print(f"Q: {query}")
+        print(f"A: {response.content}\n")
+
+# Run async function
+await process_queries()
+```
+
+### Async Batch
+
+```python
+async def batch_process():
+    inputs = ["Question 1", "Question 2", "Question 3"]
+    
+    # Async batch processing
+    responses = await model.abatch(inputs)
+    return responses
+
+results = await batch_process()
+```
+
+## Caching Responses
+
+Cache model responses to reduce costs and latency:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.caches import InMemoryCache
+from langchain_core.globals import set_llm_cache
+
+# Enable caching
+set_llm_cache(InMemoryCache())
+
+model = ChatOpenAI(model="gpt-4")
+
+# First call - hits the API
+response1 = model.invoke("What is LangChain?")
+
+# Second identical call - uses cache (much faster)
+response2 = model.invoke("What is LangChain?")
+```
+
+## Fallbacks and Retry
+
+Handle failures gracefully:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+
+# Primary model
+primary = ChatOpenAI(model="gpt-4")
+
+# Fallback model if primary fails
+fallback = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+
+# Create model with fallback
+model_with_fallback = primary.with_fallbacks([fallback])
+
+# Will try primary first, then fallback on error
+response = model_with_fallback.invoke("Hello!")
+```
+
+## Usage Metadata
+
+Track token usage and costs:
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+response = model.invoke("Explain quantum computing")
+
+# Access usage metadata
+if response.usage_metadata:
+    print(f"Input tokens: {response.usage_metadata.input_tokens}")
+    print(f"Output tokens: {response.usage_metadata.output_tokens}")
+    print(f"Total tokens: {response.usage_metadata.total_tokens}")
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Set appropriate temperature">
+    Use low temperature (0-0.3) for deterministic tasks, higher (0.7-1.0) for creative tasks.
+  </Step>
+  
+  <Step title="Manage conversation history">
+    Trim old messages to stay within context limits and reduce costs.
+  </Step>
+  
+  <Step title="Use streaming for long outputs">
+    Stream responses for better UX. See [Streaming](/guides/streaming) guide.
+  </Step>
+  
+  <Step title="Handle errors properly">
+    Use fallbacks and retries for production reliability.
+  </Step>
+  
+  <Step title="Monitor token usage">
+    Track usage metadata to optimize costs and performance.
+  </Step>
+</Steps>
+
+## Next Steps
+
+- Learn about [Streaming](/guides/streaming) for real-time responses
+- Explore [Output Parsing](/guides/output-parsing) for structured data
+- Build [Agents](/guides/building-agents) with tool-calling capabilities
+- Check [LangSmith](https://docs.langchain.com/langsmith) for observability

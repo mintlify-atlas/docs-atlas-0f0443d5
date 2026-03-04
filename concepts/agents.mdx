@@ -1,0 +1,568 @@
+---
+title: Agent Concepts
+description: Building autonomous agents that use tools and reason through multi-step tasks
+---
+
+Agents are autonomous systems that use language models to choose a sequence of actions to take. Unlike chains with predetermined steps, agents dynamically decide which tools to use and in what order based on the input.
+
+## Agent Fundamentals
+
+An agent system consists of three core components:
+
+1. **Language Model**: Makes decisions about which actions to take
+2. **Tools**: Functions the agent can execute
+3. **Agent Executor**: Orchestrates the agent loop
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from langgraph.prebuilt import create_react_agent
+
+# Define tools
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate a mathematical expression."""
+    return str(eval(expression))
+
+# Create model
+model = ChatOpenAI(model="gpt-4")
+
+# Create agent
+agent = create_react_agent(model, [calculator])
+
+# Run agent
+result = agent.invoke({"messages": [("user", "What is 25 * 4 + 10?")]})
+print(result["messages"][-1].content)
+```
+
+<Note>
+Modern LangChain agents are built using [LangGraph](https://langchain-ai.github.io/langgraph/), which provides more control and flexibility. The legacy `AgentExecutor` is maintained for backwards compatibility but new development should use LangGraph.
+</Note>
+
+## Agent Loop
+
+The basic agent execution loop:
+
+1. **Observation**: Receive input or tool result
+2. **Reasoning**: LLM analyzes the situation and decides next action
+3. **Action**: Execute a tool with specific inputs
+4. **Repeat**: Continue until task is complete
+5. **Finish**: Return final answer
+
+```python
+# Example agent loop flow:
+User: "What's the weather in SF and what should I wear?"
+  ↓
+Agent: Calls weather_tool(location="San Francisco")
+  ↓
+Tool Result: "72°F, sunny"
+  ↓
+Agent: Analyzes result, generates clothing recommendation
+  ↓
+Final Answer: "It's 72°F and sunny in SF. You should wear..."
+```
+
+## Agent Action Schema
+
+Agents work with structured action and observation schemas defined in `/libs/core/langchain_core/agents.py`:
+
+### AgentAction
+
+Represents a tool invocation request:
+
+```python
+from langchain_core.agents import AgentAction
+
+action = AgentAction(
+    tool="calculator",              # Tool name
+    tool_input="25 * 4 + 10",        # Tool input
+    log="I need to calculate this"   # Reasoning log
+)
+```
+
+Fields:
+- `tool` (str): Name of the tool to execute
+- `tool_input` (str | dict): Input to pass to the tool
+- `log` (str): LLM's reasoning before choosing this action
+
+See: `/libs/core/langchain_core/agents.py:44`
+
+### AgentActionMessageLog
+
+Extends `AgentAction` with full message history:
+
+```python
+from langchain_core.agents import AgentActionMessageLog
+from langchain_core.messages import AIMessage
+
+action = AgentActionMessageLog(
+    tool="search",
+    tool_input="LangChain documentation",
+    log="Searching for info",
+    message_log=[AIMessage(content="I should search for this")]
+)
+```
+
+Useful for chat models where you need the complete message context.
+
+See: `/libs/core/langchain_core/agents.py:105`
+
+### AgentStep
+
+Combines an action with its observation:
+
+```python
+from langchain_core.agents import AgentStep
+
+step = AgentStep(
+    action=action,
+    observation="Search results: ..."  # Tool output
+)
+```
+
+See: `/libs/core/langchain_core/agents.py:131`
+
+### AgentFinish
+
+Indicates the agent has completed its task:
+
+```python
+from langchain_core.agents import AgentFinish
+
+finish = AgentFinish(
+    return_values={"output": "The answer is 110"},
+    log="Final Answer: The answer is 110"
+)
+```
+
+Fields:
+- `return_values` (dict): Final output values
+- `log` (str): Complete LLM response including reasoning
+
+See: `/libs/core/langchain_core/agents.py:146`
+
+## Agent Patterns
+
+### ReAct Pattern
+
+Reasoning and Acting in an interleaved manner:
+
+```python
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+@tool
+def search(query: str) -> str:
+    """Search for information."""
+    return f"Results for: {query}"
+
+@tool
+def calculator(expression: str) -> str:
+    """Calculate mathematical expressions."""
+    return str(eval(expression))
+
+model = ChatOpenAI(model="gpt-4")
+agent = create_react_agent(model, [search, calculator])
+
+# Agent will reason about which tool to use
+result = agent.invoke({
+    "messages": [("user", "What is 20% of 450?")]
+})
+```
+
+ReAct agents:
+- **Reason** about the current state
+- **Act** by calling appropriate tools
+- **Observe** tool results
+- Repeat until done
+
+### Conversational Agents
+
+Agents that maintain conversation memory:
+
+```python
+from langgraph.prebuilt import create_react_agent
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+memory = MemorySaver()
+
+agent = create_react_agent(
+    model,
+    tools=[search, calculator],
+    checkpointer=memory
+)
+
+# First interaction
+config = {"configurable": {"thread_id": "1"}}
+agent.invoke(
+    {"messages": [("user", "My name is Alice")]},
+    config=config
+)
+
+# Agent remembers context
+agent.invoke(
+    {"messages": [("user", "What's my name?")]},
+    config=config
+)
+# Output: "Your name is Alice"
+```
+
+### Structured Output Agents
+
+Agents that return structured data:
+
+```python
+from pydantic import BaseModel, Field
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from langgraph.prebuilt import create_react_agent
+
+class ResearchOutput(BaseModel):
+    """Structured research findings."""
+    summary: str = Field(description="Brief summary")
+    key_points: list[str] = Field(description="Main findings")
+    sources: list[str] = Field(description="Source URLs")
+
+@tool
+def web_search(query: str) -> str:
+    """Search the web."""
+    return "Search results..."
+
+model = ChatOpenAI(model="gpt-4")
+agent = create_react_agent(model, [web_search])
+
+# Agent can use tools and format output
+result = agent.invoke({
+    "messages": [(
+        "user",
+        f"Research LangChain and format as: {ResearchOutput.model_json_schema()}"
+    )]
+})
+```
+
+### Multi-Agent Systems
+
+Multiple specialized agents collaborating:
+
+```python
+from langgraph.graph import StateGraph, MessagesState
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+
+# Researcher agent
+researcher = create_react_agent(
+    ChatOpenAI(model="gpt-4"),
+    [search_tool],
+)
+
+# Writer agent
+writer = create_react_agent(
+    ChatOpenAI(model="gpt-4"),
+    [grammar_tool],
+)
+
+# Orchestrate
+class State(MessagesState):
+    pass
+
+workflow = StateGraph(State)
+workflow.add_node("researcher", researcher)
+workflow.add_node("writer", writer)
+workflow.set_entry_point("researcher")
+workflow.add_edge("researcher", "writer")
+workflow.set_finish_point("writer")
+
+app = workflow.compile()
+```
+
+## Tool Integration
+
+Agents execute tools to interact with external systems. See the [Tools documentation](/concepts/tools) for details on creating tools.
+
+### Tool Calling vs Function Calling
+
+Modern chat models support native tool calling:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+@tool
+def get_weather(location: str) -> str:
+    """Get current weather for a location."""
+    return f"Weather in {location}: Sunny, 72°F"
+
+# Bind tools to model
+model = ChatOpenAI(model="gpt-4")
+model_with_tools = model.bind_tools([get_weather])
+
+# Model returns tool calls
+response = model_with_tools.invoke("What's the weather in NYC?")
+print(response.tool_calls)
+# [{'name': 'get_weather', 'args': {'location': 'NYC'}, 'id': '...'}]
+```
+
+The agent executor handles invoking the actual tools and feeding results back.
+
+### Tool Error Handling
+
+Handle tool failures gracefully:
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def risky_operation(value: int) -> str:
+    """Operation that might fail."""
+    try:
+        if value < 0:
+            raise ValueError("Value must be positive")
+        return f"Result: {value * 2}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Agent receives error message and can retry or choose different approach
+```
+
+## Agent Configuration
+
+### Max Iterations
+
+Prevent infinite loops:
+
+```python
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+
+agent = create_react_agent(
+    ChatOpenAI(model="gpt-4"),
+    tools=[search, calculator]
+)
+
+# LangGraph handles iterations through recursion_limit
+result = agent.invoke(
+    {"messages": [("user", "Complex task")]},
+    config={"recursion_limit": 10}
+)
+```
+
+### Early Stopping
+
+Control when agents should stop:
+
+```python
+# Custom stopping condition in LangGraph
+from langgraph.graph import StateGraph
+
+def should_continue(state):
+    messages = state["messages"]
+    last_message = messages[-1]
+    # Stop if no tool calls
+    return len(last_message.tool_calls) > 0
+
+workflow.add_conditional_edges(
+    "agent",
+    should_continue,
+    {
+        True: "tools",
+        False: END
+    }
+)
+```
+
+### Agent Prompting
+
+Customize agent system prompts:
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langgraph.prebuilt import create_react_agent
+
+system_prompt = """You are a helpful assistant.
+
+When using tools:
+1. Always explain your reasoning
+2. Use tools one at a time
+3. Verify results before answering
+"""
+
+model = ChatOpenAI(model="gpt-4")
+model = model.bind(system=system_prompt)
+
+agent = create_react_agent(model, tools)
+```
+
+## Observability and Debugging
+
+### Trace Agent Steps
+
+Monitor agent decision-making:
+
+```python
+from langchain_core.callbacks import StdOutCallbackHandler
+
+result = agent.invoke(
+    {"messages": [("user", "Question")]},
+    config={"callbacks": [StdOutCallbackHandler()]}
+)
+
+# Prints each step:
+# - Tool invocations
+# - LLM calls
+# - Intermediate results
+```
+
+### Custom Callbacks
+
+Implement custom agent monitoring:
+
+```python
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.agents import AgentAction, AgentFinish
+
+class AgentMonitor(BaseCallbackHandler):
+    def on_agent_action(self, action: AgentAction, **kwargs) -> None:
+        print(f"Agent using tool: {action.tool}")
+        print(f"Input: {action.tool_input}")
+        print(f"Reasoning: {action.log}")
+    
+    def on_agent_finish(self, finish: AgentFinish, **kwargs) -> None:
+        print(f"Agent finished: {finish.return_values}")
+
+result = agent.invoke(
+    {"messages": [("user", "Question")]},
+    config={"callbacks": [AgentMonitor()]}
+)
+```
+
+### Intermediate Steps
+
+Access all agent steps:
+
+```python
+# With LangGraph, state includes full message history
+result = agent.invoke({"messages": [("user", "Question")]})
+
+for message in result["messages"]:
+    print(f"Type: {type(message).__name__}")
+    print(f"Content: {message.content}")
+    if hasattr(message, "tool_calls"):
+        print(f"Tool calls: {message.tool_calls}")
+```
+
+## Best Practices
+
+<Accordion title="Tool descriptions matter">
+Clear, detailed tool descriptions help the LLM choose the right tool:
+
+```python
+@tool
+def search(query: str) -> str:
+    """Search the web for current information.
+    
+    Use this when you need:
+    - Recent news or events
+    - Real-time data
+    - Information not in your training data
+    
+    Args:
+        query: Specific search terms, be precise
+    """
+    return search_api(query)
+```
+</Accordion>
+
+<Accordion title="Limit tool count">
+Too many tools confuse the agent. Group related functions or use hierarchical agents:
+
+```python
+# Instead of 20 individual tools:
+tools = [weather, stocks, news, ...]
+
+# Use specialized sub-agents:
+weather_agent = create_react_agent(model, [weather, forecast, alerts])
+finance_agent = create_react_agent(model, [stocks, crypto, forex])
+
+# Route to appropriate agent
+```
+</Accordion>
+
+<Accordion title="Set iteration limits">
+Always configure max iterations to prevent runaway costs:
+
+```python
+result = agent.invoke(
+    input,
+    config={"recursion_limit": 15}  # Reasonable limit
+)
+```
+</Accordion>
+
+<Accordion title="Validate tool inputs">
+Use Pydantic models for type safety:
+
+```python
+from pydantic import BaseModel, Field
+from langchain_core.tools import tool
+
+class SearchInput(BaseModel):
+    query: str = Field(..., min_length=1, max_length=200)
+    max_results: int = Field(default=5, ge=1, le=20)
+
+@tool(args_schema=SearchInput)
+def search(query: str, max_results: int = 5) -> str:
+    """Search with validated inputs."""
+    return search_api(query, max_results)
+```
+</Accordion>
+
+<Warning>
+The legacy `AgentExecutor` class is maintained for backwards compatibility but is deprecated. New agent development should use [LangGraph](https://langchain-ai.github.io/langgraph/) for better control, observability, and debugging capabilities.
+</Warning>
+
+## Migration from Legacy Agents
+
+Legacy agent code:
+
+```python
+# Old approach (deprecated)
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_core.prompts import PromptTemplate
+
+prompt = PromptTemplate.from_template("{input}")
+agent = create_react_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+result = agent_executor.invoke({"input": "Question"})
+```
+
+Modern LangGraph approach:
+
+```python
+# New approach (recommended)
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-4")
+agent = create_react_agent(model, tools)
+result = agent.invoke({"messages": [("user", "Question")]})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Tools" icon="wrench" href="/concepts/tools">
+    Learn to build custom tools for agents
+  </Card>
+  <Card title="LangGraph" icon="diagram-project" href="https://langchain-ai.github.io/langgraph/">
+    Build advanced agent systems with LangGraph
+  </Card>
+  <Card title="Messages" icon="message" href="/concepts/messages">
+    Understand message types in agent interactions
+  </Card>
+  <Card title="Runnables" icon="link" href="/concepts/runnables">
+    Compose agents with other components
+  </Card>
+</CardGroup>

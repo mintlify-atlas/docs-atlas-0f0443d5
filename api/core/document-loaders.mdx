@@ -1,0 +1,427 @@
+---
+title: Document Loaders
+description: Base classes for loading documents from various sources
+---
+
+## Overview
+
+Document loaders load data from various sources into `Document` objects. They provide a standard interface for loading and optionally splitting documents.
+
+## BaseLoader
+
+Abstract interface for document loaders.
+
+**Source:** `langchain_core.document_loaders.base:26`
+
+### Core Methods
+
+#### load
+
+```python
+def load(self) -> list[Document]
+```
+
+Load data into `Document` objects.
+
+<ResponseField name="return" type="list[Document]">
+  List of loaded documents
+</ResponseField>
+
+**Note:** Prefer implementing `lazy_load` instead. This method is provided for convenience and calls `lazy_load` under the hood.
+
+#### aload
+
+```python
+async def aload(self) -> list[Document]
+```
+
+Async version of `load`.
+
+<ResponseField name="return" type="list[Document]">
+  List of loaded documents
+</ResponseField>
+
+#### lazy_load
+
+```python
+def lazy_load(self) -> Iterator[Document]
+```
+
+Lazy loader for documents. **Implement this method in subclasses.**
+
+Generators avoid loading all documents into memory at once, which is important for large datasets.
+
+<ResponseField name="return" type="Iterator[Document]">
+  Iterator yielding documents one at a time
+</ResponseField>
+
+#### alazy_load
+
+```python
+async def alazy_load(self) -> AsyncIterator[Document]
+```
+
+Async lazy loader for documents.
+
+<ResponseField name="return" type="AsyncIterator[Document]">
+  Async iterator yielding documents
+</ResponseField>
+
+#### load_and_split
+
+```python
+def load_and_split(
+    self,
+    text_splitter: TextSplitter | None = None
+) -> list[Document]
+```
+
+Load documents and split into chunks.
+
+<ParamField path="text_splitter" type="TextSplitter | None">
+  Text splitter to use. Defaults to `RecursiveCharacterTextSplitter` if `None`.
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  List of split document chunks
+</ResponseField>
+
+**Raises:**
+- `ImportError`: If `langchain-text-splitters` not installed and no `text_splitter` provided
+
+**Deprecated:** Do not override this method. It will be deprecated in future versions.
+
+### Implementation Example
+
+```python
+from langchain_core.document_loaders import BaseLoader
+from langchain_core.documents import Document
+
+class CustomLoader(BaseLoader):
+    """Load documents from a custom source."""
+    
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+    
+    def lazy_load(self) -> Iterator[Document]:
+        """Lazy load documents from file."""
+        with open(self.file_path, 'r') as f:
+            for i, line in enumerate(f):
+                yield Document(
+                    page_content=line.strip(),
+                    metadata={"line": i, "source": self.file_path}
+                )
+
+# Usage
+loader = CustomLoader("data.txt")
+docs = loader.load()  # Loads all at once
+# or
+for doc in loader.lazy_load():  # Loads one at a time
+    process(doc)
+```
+
+## BaseBlobParser
+
+Abstract interface for parsing blobs into documents.
+
+**Source:** `langchain_core.document_loaders.base:117`
+
+A blob parser provides a way to parse raw data stored in a `Blob` into one or more `Document` objects. Parsers can be composed with blob loaders.
+
+### Methods
+
+#### lazy_parse
+
+```python
+def lazy_parse(self, blob: Blob) -> Iterator[Document]
+```
+
+Lazy parsing interface. **Must be implemented by subclasses.**
+
+<ParamField path="blob" type="Blob" required>
+  The blob to parse
+</ParamField>
+
+<ResponseField name="return" type="Iterator[Document]">
+  Generator of documents
+</ResponseField>
+
+#### parse
+
+```python
+def parse(self, blob: Blob) -> list[Document]
+```
+
+Eagerly parse the blob into documents.
+
+<ParamField path="blob" type="Blob" required>
+  The blob to parse
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  List of parsed documents
+</ResponseField>
+
+**Note:** This is a convenience method for interactive development. Production code should use `lazy_parse`.
+
+### Implementation Example
+
+```python
+from langchain_core.document_loaders import BaseBlobParser
+from langchain_core.documents import Document, Blob
+import json
+
+class JSONParser(BaseBlobParser):
+    """Parse JSON blobs into documents."""
+    
+    def lazy_parse(self, blob: Blob) -> Iterator[Document]:
+        """Parse JSON blob."""
+        data = json.loads(blob.as_string())
+        
+        if isinstance(data, list):
+            for item in data:
+                yield Document(
+                    page_content=json.dumps(item),
+                    metadata={"source": blob.source}
+                )
+        else:
+            yield Document(
+                page_content=json.dumps(data),
+                metadata={"source": blob.source}
+            )
+
+# Usage
+parser = JSONParser()
+blob = Blob.from_path("data.json")
+docs = parser.parse(blob)
+```
+
+## Document
+
+Class representing a document with content and metadata.
+
+**Source:** `langchain_core.documents`
+
+### Properties
+
+<ResponseField name="page_content" type="str" required>
+  The text content of the document
+</ResponseField>
+
+<ResponseField name="metadata" type="dict[str, Any]" default="{}">
+  Metadata associated with the document. Common keys:
+  - `source`: Source of the document
+  - `page`: Page number
+  - `chunk`: Chunk index
+</ResponseField>
+
+<ResponseField name="id" type="str | None" default="None">
+  Optional unique identifier
+</ResponseField>
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    page_content: str,
+    *,
+    metadata: dict[str, Any] | None = None,
+    id: str | None = None
+)
+```
+
+<ParamField path="page_content" type="str" required>
+  Document content
+</ParamField>
+
+<ParamField path="metadata" type="dict | None">
+  Document metadata
+</ParamField>
+
+<ParamField path="id" type="str | None">
+  Document ID
+</ParamField>
+
+### Example
+
+```python
+from langchain_core.documents import Document
+
+doc = Document(
+    page_content="LangChain is a framework for developing applications powered by language models.",
+    metadata={
+        "source": "https://langchain.com",
+        "title": "LangChain Overview",
+        "date": "2024-01-01"
+    },
+    id="doc_123"
+)
+
+print(doc.page_content)
+print(doc.metadata["source"])
+```
+
+## Blob
+
+Represents raw data blob with optional metadata.
+
+**Source:** `langchain_core.documents.base`
+
+Blobs are used to represent binary or text data from various sources (files, URLs, etc.).
+
+### Properties
+
+<ResponseField name="data" type="bytes | str | None">
+  The raw data
+</ResponseField>
+
+<ResponseField name="mimetype" type="str | None">
+  MIME type of the data
+</ResponseField>
+
+<ResponseField name="encoding" type="str" default="'utf-8'">
+  Encoding of the data
+</ResponseField>
+
+<ResponseField name="source" type="str | None">
+  Source identifier (file path, URL, etc.)
+</ResponseField>
+
+### Methods
+
+#### from_path
+
+```python
+@classmethod
+def from_path(
+    cls,
+    path: str | Path,
+    *,
+    encoding: str = "utf-8",
+    mime_type: str | None = None
+) -> Blob
+```
+
+Create a blob from a file path.
+
+<ParamField path="path" type="str | Path" required>
+  Path to the file
+</ParamField>
+
+<ParamField path="encoding" type="str" default="'utf-8'">
+  Text encoding
+</ParamField>
+
+<ParamField path="mime_type" type="str | None">
+  MIME type (auto-detected if `None`)
+</ParamField>
+
+#### from_data
+
+```python
+@classmethod
+def from_data(
+    cls,
+    data: bytes | str,
+    *,
+    encoding: str = "utf-8",
+    mime_type: str | None = None,
+    source: str | None = None
+) -> Blob
+```
+
+Create a blob from raw data.
+
+#### as_string
+
+```python
+def as_string(self) -> str
+```
+
+Get the blob data as a string.
+
+#### as_bytes
+
+```python
+def as_bytes(self) -> bytes
+```
+
+Get the blob data as bytes.
+
+### Example
+
+```python
+from langchain_core.documents import Blob
+
+# From file
+blob = Blob.from_path("document.pdf", mime_type="application/pdf")
+
+# From data
+blob = Blob.from_data(
+    data="Hello, world!",
+    mime_type="text/plain",
+    source="inline"
+)
+
+print(blob.as_string())
+```
+
+## Common Loader Patterns
+
+### Text File Loader Pattern
+
+```python
+class TextFileLoader(BaseLoader):
+    def __init__(self, file_path: str, encoding: str = "utf-8"):
+        self.file_path = file_path
+        self.encoding = encoding
+    
+    def lazy_load(self) -> Iterator[Document]:
+        with open(self.file_path, 'r', encoding=self.encoding) as f:
+            yield Document(
+                page_content=f.read(),
+                metadata={"source": self.file_path}
+            )
+```
+
+### Directory Loader Pattern
+
+```python
+class DirectoryLoader(BaseLoader):
+    def __init__(self, path: str, glob: str = "**/*"):
+        self.path = Path(path)
+        self.glob = glob
+    
+    def lazy_load(self) -> Iterator[Document]:
+        for file_path in self.path.glob(self.glob):
+            if file_path.is_file():
+                with open(file_path, 'r') as f:
+                    yield Document(
+                        page_content=f.read(),
+                        metadata={"source": str(file_path)}
+                    )
+```
+
+### Multi-Document File Loader Pattern
+
+```python
+class JSONLinesLoader(BaseLoader):
+    """Load JSONL files where each line is a document."""
+    
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+    
+    def lazy_load(self) -> Iterator[Document]:
+        with open(self.file_path, 'r') as f:
+            for i, line in enumerate(f):
+                data = json.loads(line)
+                yield Document(
+                    page_content=data.get("text", ""),
+                    metadata={
+                        "source": self.file_path,
+                        "line": i,
+                        **data.get("metadata", {})
+                    }
+                )
+```

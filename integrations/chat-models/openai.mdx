@@ -1,0 +1,118 @@
+---
+title: OpenAI
+---
+
+This integration connects OpenAI's chat models to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-openai
+```
+
+## Setup
+
+Set your OpenAI API key as an environment variable:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+## Usage
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0,
+    max_tokens=None,
+    timeout=None,
+    max_retries=2,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatOpenAI
+
+<ParamField path="model" type="str" required>
+  Name of OpenAI model to use (e.g., `gpt-4o`, `gpt-4o-mini`, `o1`, `o3-mini`).
+</ParamField>
+
+<ParamField path="temperature" type="float" default="1">
+  Sampling temperature between 0 and 2. Higher values make output more random, lower values more deterministic.
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="logprobs" type="bool | None" default="None">
+  Whether to return log probabilities of output tokens.
+</ParamField>
+
+<ParamField path="stream_options" type="dict" default="None">
+  Configure streaming outputs, like whether to return token usage when streaming (e.g., `{"include_usage": True}`).
+</ParamField>
+
+<ParamField path="use_responses_api" type="bool | None" default="None">
+  Whether to use the responses API.
+</ParamField>
+
+<ParamField path="timeout" type="float | tuple[float, float] | None" default="None">
+  Timeout for requests in seconds.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="2">
+  Maximum number of retries for failed requests.
+</ParamField>
+
+<ParamField path="api_key" type="str | None" default="None">
+  OpenAI API key. If not provided, reads from `OPENAI_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="base_url" type="str | None" default="None">
+  Base URL for API requests. Only specify if using a proxy or service emulator.
+</ParamField>
+
+<ParamField path="organization" type="str | None" default="None">
+  OpenAI organization ID. If not provided, reads from `OPENAI_ORG_ID` environment variable.
+</ParamField>
+
+## Supported Models
+
+- **GPT-4o series**: `gpt-4o`, `gpt-4o-mini` - Latest multimodal models
+- **o-series**: `o1`, `o1-mini`, `o3-mini` - Reasoning models with advanced problem-solving
+- **GPT-4 Turbo**: `gpt-4-turbo`, `gpt-4-turbo-preview` - High-intelligence models
+- **GPT-3.5 Turbo**: `gpt-3.5-turbo` - Fast, cost-effective model
+
+## Features
+
+- Text generation
+- Function/tool calling
+- Vision (multimodal input with GPT-4o)
+- JSON mode
+- Streaming
+- Async support
+- Token usage tracking
+- Prompt caching
+
+<Note>
+  `ChatOpenAI` targets official OpenAI API specifications only. Non-standard response fields added by third-party providers are not extracted. If using a provider like OpenRouter or vLLM, use the corresponding provider-specific package instead.
+</Note>

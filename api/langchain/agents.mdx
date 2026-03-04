@@ -1,0 +1,174 @@
+---
+title: Agents
+description: Agent creation and state management
+---
+
+## create_agent
+
+```python
+def create_agent(
+    model: str | BaseChatModel,
+    tools: Sequence[BaseTool | Callable[..., Any] | dict[str, Any]] | None = None,
+    *,
+    system_prompt: str | SystemMessage | None = None,
+    middleware: Sequence[AgentMiddleware[StateT_co, ContextT]] = (),
+    response_format: ResponseFormat[ResponseT] | type[ResponseT] | dict[str, Any] | None = None,
+    state_schema: type[AgentState[ResponseT]] | None = None,
+    context_schema: type[ContextT] | None = None,
+    checkpointer: Checkpointer | None = None,
+    store: BaseStore | None = None,
+    interrupt_before: list[str] | None = None,
+    interrupt_after: list[str] | None = None,
+    debug: bool = False,
+    name: str | None = None,
+    cache: BaseCache[Any] | None = None,
+) -> CompiledStateGraph[
+    AgentState[ResponseT], ContextT, _InputAgentState, _OutputAgentState[ResponseT]
+]
+```
+
+Creates an agent graph that calls tools in a loop until a stopping condition is met.
+
+For more details on using `create_agent`, visit the [Agents](https://docs.langchain.com/oss/python/langchain/agents) docs.
+
+<ParamField path="model" type="str | BaseChatModel" required>
+  The language model for the agent.
+
+  Can be a string identifier (e.g., `"openai:gpt-4"`) or a direct chat model instance (e.g., `ChatOpenAI` or other LangChain chat model).
+
+  For a full list of supported model strings, see [`init_chat_model`](/api/langchain/chat-models#init_chat_model).
+</ParamField>
+
+<ParamField path="tools" type="Sequence[BaseTool | Callable[..., Any] | dict[str, Any]] | None">
+  A list of tools, `dict`, or `Callable`.
+
+  If `None` or an empty list, the agent will consist of a model node without a tool calling loop.
+
+  See the [Tools](https://docs.langchain.com/oss/python/langchain/tools) docs for more information.
+</ParamField>
+
+<ParamField path="system_prompt" type="str | SystemMessage | None">
+  An optional system prompt for the LLM.
+
+  Can be a `str` (which will be converted to a `SystemMessage`) or a `SystemMessage` instance directly. The system message is added to the beginning of the message list when calling the model.
+</ParamField>
+
+<ParamField path="middleware" type="Sequence[AgentMiddleware[StateT_co, ContextT]]" default="()">
+  A sequence of middleware instances to apply to the agent.
+
+  Middleware can intercept and modify agent behavior at various stages.
+
+  See the [Middleware](https://docs.langchain.com/oss/python/langchain/middleware) docs for more information.
+</ParamField>
+
+<ParamField path="response_format" type="ResponseFormat[ResponseT] | type[ResponseT] | dict[str, Any] | None">
+  An optional configuration for structured responses.
+
+  Can be a `ToolStrategy`, `ProviderStrategy`, or a Pydantic model class.
+
+  If provided, the agent will handle structured output during the conversation flow.
+
+  Raw schemas will be wrapped in an appropriate strategy based on model capabilities.
+
+  See the [Structured output](https://docs.langchain.com/oss/python/langchain/structured-output) docs for more information.
+</ParamField>
+
+<ParamField path="state_schema" type="type[AgentState[ResponseT]] | None">
+  An optional `TypedDict` schema that extends `AgentState`.
+
+  When provided, this schema is used instead of `AgentState` as the base schema for merging with middleware state schemas. This allows users to add custom state fields without needing to create custom middleware.
+
+  Generally, it's recommended to use `state_schema` extensions via middleware to keep relevant extensions scoped to corresponding hooks / tools.
+</ParamField>
+
+<ParamField path="context_schema" type="type[ContextT] | None">
+  An optional schema for runtime context.
+</ParamField>
+
+<ParamField path="checkpointer" type="Checkpointer | None">
+  An optional checkpoint saver object.
+
+  Used for persisting the state of the graph (e.g., as chat memory) for a single thread (e.g., a single conversation).
+</ParamField>
+
+<ParamField path="store" type="BaseStore | None">
+  An optional store object.
+
+  Used for persisting data across multiple threads (e.g., multiple conversations / users).
+</ParamField>
+
+<ParamField path="interrupt_before" type="list[str] | None">
+  An optional list of node names to interrupt before.
+
+  Useful if you want to add a user confirmation or other interrupt before taking an action.
+</ParamField>
+
+<ParamField path="interrupt_after" type="list[str] | None">
+  An optional list of node names to interrupt after.
+
+  Useful if you want to return directly or run additional processing on an output.
+</ParamField>
+
+<ParamField path="debug" type="bool" default="False">
+  Whether to enable verbose logging for graph execution.
+
+  When enabled, prints detailed information about each node execution, state updates, and transitions during agent runtime. Useful for debugging middleware behavior and understanding agent execution flow.
+</ParamField>
+
+<ParamField path="name" type="str | None">
+  An optional name for the `CompiledStateGraph`.
+
+  This name will be automatically used when adding the agent graph to another graph as a subgraph node - particularly useful for building multi-agent systems.
+</ParamField>
+
+<ParamField path="cache" type="BaseCache[Any] | None">
+  An optional `BaseCache` instance to enable caching of graph execution.
+</ParamField>
+
+<ResponseField name="returns" type="CompiledStateGraph">
+  A compiled `StateGraph` that can be used for chat interactions.
+</ResponseField>
+
+### Example
+
+```python
+from langchain.agents import create_agent
+
+
+def check_weather(location: str) -> str:
+    '''Return the weather forecast for the specified location.'''
+    return f"It's always sunny in {location}"
+
+
+graph = create_agent(
+    model="anthropic:claude-sonnet-4-5-20250929",
+    tools=[check_weather],
+    system_prompt="You are a helpful assistant",
+)
+inputs = {"messages": [{"role": "user", "content": "what is the weather in sf"}]}
+for chunk in graph.stream(inputs, stream_mode="updates"):
+    print(chunk)
+```
+
+## AgentState
+
+```python
+class AgentState(TypedDict, Generic[ResponseT]):
+    """The state schema for agents created with create_agent."""
+    messages: Annotated[list[AnyMessage], add_messages]
+    structured_response: ResponseT | None
+```
+
+The state schema for agents created with `create_agent`.
+
+<ParamField path="messages" type="Annotated[list[AnyMessage], add_messages]" required>
+  The list of messages in the conversation.
+
+  Uses the `add_messages` reducer to automatically merge new messages into the existing list.
+</ParamField>
+
+<ParamField path="structured_response" type="ResponseT | None">
+  The structured response from the agent, if a `response_format` was specified.
+
+  This field is populated when the agent produces structured output based on the configured response format.
+</ParamField>

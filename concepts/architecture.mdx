@@ -1,0 +1,375 @@
+---
+title: Framework Architecture
+description: Understanding LangChain's modular monorepo structure and layered design
+---
+
+LangChain is built as a modular Python monorepo with a clear separation of concerns across multiple layers. This architecture enables both flexibility and stability while supporting a rich ecosystem of integrations.
+
+## Monorepo Structure
+
+The LangChain project is organized into independently versioned packages:
+
+```txt
+langchain/
+├── libs/
+│   ├── core/             # langchain-core: Base abstractions
+│   ├── langchain/        # langchain-classic (legacy)
+│   ├── langchain_v1/     # langchain: Main package
+│   ├── partners/         # Third-party integrations
+│   │   ├── openai/
+│   │   ├── anthropic/
+│   │   ├── ollama/
+│   │   └── ...
+│   ├── text-splitters/   # Document chunking
+│   ├── standard-tests/   # Integration test suite
+│   └── model-profiles/   # Model configurations
+```
+
+### Package Dependencies
+
+Each package maintains its own `pyproject.toml` and dependency specifications. The dependency flow is:
+
+- **Partners** depend on **Core**
+- **LangChain** depends on **Core**
+- **Core** has minimal third-party dependencies
+
+<Note>
+The `langchain-core` package intentionally keeps dependencies lightweight to serve as a stable foundation. No third-party integrations are defined in core.
+</Note>
+
+## Layered Architecture
+
+LangChain uses a three-layer architecture that separates abstractions from implementations:
+
+### Core Layer (`langchain-core`)
+
+Defines base abstractions, interfaces, and protocols that all components implement:
+
+```python
+from langchain_core.runnables import Runnable
+from langchain_core.language_models import BaseLanguageModel
+from langchain_core.messages import BaseMessage
+from langchain_core.tools import BaseTool
+```
+
+Key abstractions defined in core:
+
+- **Runnable**: Universal invocation protocol
+- **BaseLanguageModel**: Language model interface
+- **BaseMessage**: Message types for chat interactions
+- **BaseTool**: Tool interface for agent actions
+- **BasePromptTemplate**: Prompt template system
+- **BaseOutputParser**: Output parsing interface
+- **Serializable**: Serialization support
+
+Location: `/libs/core/langchain_core/`
+
+### Implementation Layer (`langchain`)
+
+Provides concrete implementations and high-level utilities:
+
+```python
+from langchain.chains import LLMChain
+from langchain.agents import AgentExecutor
+from langchain.memory import ConversationBufferMemory
+```
+
+This layer builds on core abstractions to provide:
+
+- Pre-built chains and agent patterns
+- Memory systems for stateful applications
+- Document loaders and transformers
+- Utilities for common workflows
+
+Location: `/libs/langchain_v1/langchain/`
+
+### Integration Layer (Partners)
+
+Third-party service integrations as separate packages:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_ollama import ChatOllama
+```
+
+Each integration:
+
+- Lives in its own versioned package
+- Depends only on `langchain-core`
+- Implements core abstractions
+- May be maintained in this monorepo or external repositories
+
+Location: `/libs/partners/*/`
+
+<Warning>
+Some integrations (like `langchain-google` and `langchain-aws`) are maintained in separate repositories. Check the [integrations documentation](https://python.langchain.com/docs/integrations/) for the complete list.
+</Warning>
+
+## Extension Points
+
+LangChain provides multiple extension mechanisms to customize behavior:
+
+### 1. Custom Runnables
+
+Extend the `Runnable` protocol to create composable components:
+
+```python
+from langchain_core.runnables import Runnable, RunnableConfig
+from typing import Any
+
+class CustomProcessor(Runnable[str, str]):
+    """Custom runnable with full LCEL support."""
+    
+    def invoke(self, input: str, config: RunnableConfig | None = None) -> str:
+        # Your processing logic
+        return input.upper()
+    
+    # async, batch, and stream are auto-generated
+```
+
+Custom runnables automatically get:
+- Async support (`ainvoke`, `astream`, `abatch`)
+- Streaming capabilities
+- Batch processing
+- Composition with `|` operator
+
+See: `/libs/core/langchain_core/runnables/base.py:124`
+
+### 2. Tool Development
+
+Create custom tools by extending `BaseTool`:
+
+```python
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
+
+class CalculatorInput(BaseModel):
+    expression: str = Field(description="Mathematical expression to evaluate")
+
+class CalculatorTool(BaseTool):
+    name: str = "calculator"
+    description: str = "Evaluates mathematical expressions"
+    args_schema: type[BaseModel] = CalculatorInput
+    
+    def _run(self, expression: str) -> str:
+        return str(eval(expression))
+```
+
+See: `/libs/core/langchain_core/tools/base.py:289`
+
+### 3. Custom Language Models
+
+Implement custom LLM wrappers:
+
+```python
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.outputs import ChatResult, ChatGeneration
+
+class CustomChatModel(BaseChatModel):
+    """Custom chat model implementation."""
+    
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        # Call your model API
+        response = "Model response"
+        message = AIMessage(content=response)
+        generation = ChatGeneration(message=message)
+        return ChatResult(generations=[generation])
+    
+    @property
+    def _llm_type(self) -> str:
+        return "custom"
+```
+
+See: `/libs/core/langchain_core/language_models/chat_models.py`
+
+### 4. Callbacks and Tracing
+
+Hook into the execution lifecycle:
+
+```python
+from langchain_core.callbacks.base import BaseCallbackHandler
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import LLMResult
+from uuid import UUID
+
+class LoggingCallback(BaseCallbackHandler):
+    """Custom callback for observability."""
+    
+    def on_llm_start(
+        self,
+        serialized: dict,
+        prompts: list[str],
+        **kwargs,
+    ) -> None:
+        print(f"LLM started with prompts: {prompts}")
+    
+    def on_llm_end(
+        self,
+        response: LLMResult,
+        **kwargs,
+    ) -> None:
+        print(f"LLM finished: {response}")
+```
+
+See: `/libs/core/langchain_core/callbacks/base.py`
+
+## Plugin Lifecycle
+
+Components in LangChain follow a consistent lifecycle:
+
+### 1. Initialization
+
+Components are initialized with configuration:
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(
+    model="gpt-4",
+    temperature=0.7,
+    api_key="your-key"
+)
+```
+
+### 2. Configuration
+
+Runtime configuration through `RunnableConfig`:
+
+```python
+from langchain_core.runnables import RunnableConfig
+
+config = RunnableConfig(
+    tags=["production", "important"],
+    metadata={"user_id": "123"},
+    callbacks=[logging_callback],
+    max_concurrency=5
+)
+
+result = model.invoke("Hello", config=config)
+```
+
+Configuration fields defined in `/libs/core/langchain_core/runnables/config.py:49`:
+
+- `tags`: For filtering and categorization
+- `metadata`: JSON-serializable context
+- `callbacks`: Lifecycle hooks
+- `run_name`: Custom tracer name
+- `max_concurrency`: Parallel execution limit
+
+### 3. Invocation
+
+Components expose standard invocation methods:
+
+```python
+# Synchronous
+result = runnable.invoke(input, config=config)
+
+# Asynchronous
+result = await runnable.ainvoke(input, config=config)
+
+# Streaming
+for chunk in runnable.stream(input, config=config):
+    print(chunk)
+
+# Batch processing
+results = runnable.batch([input1, input2], config=config)
+```
+
+### 4. Composition
+
+Components compose using the pipe operator:
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+chain = prompt | model | StrOutputParser()
+result = chain.invoke({"topic": "AI"})
+```
+
+### 5. Serialization
+
+Components can be serialized for storage and versioning:
+
+```python
+from langchain_core.load import dumps, loads
+
+# Serialize
+serialized = dumps(chain)
+
+# Deserialize
+reconstructed = loads(serialized)
+```
+
+See: `/libs/core/langchain_core/load/serializable.py:88`
+
+## Development Tools
+
+The monorepo uses modern Python tooling:
+
+- **uv**: Fast package installer and resolver
+- **ruff**: Linting and formatting
+- **mypy**: Static type checking
+- **pytest**: Testing framework
+- **make**: Task automation
+
+<Accordion title="Common Development Commands">
+```bash
+# Install all dependencies
+uv sync --all-groups
+
+# Run tests
+make test
+
+# Lint code
+make lint
+
+# Format code
+make format
+
+# Type checking
+uv run --group lint mypy .
+```
+</Accordion>
+
+## Package Management
+
+Each package in `/libs/` has:
+
+- `pyproject.toml`: Package metadata and dependencies
+- `uv.lock`: Locked dependency versions
+- Independent versioning and release cycle
+
+Local development uses editable installs via `[tool.uv.sources]` configuration.
+
+## Testing Strategy
+
+LangChain uses a layered testing approach:
+
+- **Unit tests** (`tests/unit_tests/`): No network calls, fast feedback
+- **Integration tests** (`tests/integration_tests/`): Real API calls
+- **Standard tests** (`libs/standard-tests/`): Shared test suite for integrations
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Runnables" icon="link" href="/concepts/runnables">
+    Learn about the universal invocation protocol
+  </Card>
+  <Card title="Messages" icon="message" href="/concepts/messages">
+    Understand message types and structure
+  </Card>
+  <Card title="Tools" icon="wrench" href="/concepts/tools">
+    Build custom tools for agents
+  </Card>
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Create autonomous agent systems
+  </Card>
+</CardGroup>

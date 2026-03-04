@@ -1,0 +1,485 @@
+---
+title: Language Models
+description: Base classes for chat models and LLMs
+---
+
+## Overview
+
+LangChain provides two main types of language models:
+
+- **Chat Models** (`BaseChatModel`): Conversational models that take messages and return messages
+- **LLMs** (`BaseLLM`): Traditional text-in, text-out language models
+
+## BaseChatModel
+
+Base class for chat models that use message-based interfaces.
+
+**Source:** `langchain_core.language_models.chat_models:246`
+
+**Inherits:** `BaseLanguageModel[AIMessage]`, `Runnable`
+
+### Type Parameters
+
+Chat models are generic over their output type (always `AIMessage`).
+
+### Properties
+
+<ResponseField name="rate_limiter" type="BaseRateLimiter | None">
+  Optional rate limiter for throttling requests
+</ResponseField>
+
+<ResponseField name="disable_streaming" type="bool | Literal['tool_calling']" default="False">
+  Whether to disable streaming for this model.
+  
+  - `True`: Always bypass streaming
+  - `'tool_calling'`: Bypass streaming only when tools are provided
+  - `False`: Use streaming if available
+</ResponseField>
+
+<ResponseField name="output_version" type="str | None">
+  Version of `AIMessage` output format. Can be `'v0'` (provider-specific) or `'v1'` (standardized).
+</ResponseField>
+
+<ResponseField name="profile" type="ModelProfile | None">
+  Profile detailing model capabilities (context window, supported modalities, etc.). Beta feature.
+</ResponseField>
+
+### Core Methods
+
+#### invoke
+
+```python
+def invoke(
+    self,
+    input: LanguageModelInput,
+    config: RunnableConfig | None = None,
+    *,
+    stop: list[str] | None = None,
+    **kwargs: Any
+) -> AIMessage
+```
+
+Generate a chat completion for a single input.
+
+<ParamField path="input" type="str | list[dict | tuple | BaseMessage] | PromptValue" required>
+  The input to the model. Can be:
+  - A string (converted to `HumanMessage`)
+  - A list of messages or message-like tuples
+  - A `PromptValue`
+</ParamField>
+
+<ParamField path="config" type="RunnableConfig | None">
+  Configuration for callbacks, tags, metadata
+</ParamField>
+
+<ParamField path="stop" type="list[str] | None">
+  Stop sequences for generation
+</ParamField>
+
+<ParamField path="**kwargs" type="Any">
+  Additional model-specific parameters
+</ParamField>
+
+<ResponseField name="return" type="AIMessage">
+  The model's response as an `AIMessage`
+</ResponseField>
+
+#### ainvoke
+
+```python
+async def ainvoke(
+    self,
+    input: LanguageModelInput,
+    config: RunnableConfig | None = None,
+    *,
+    stop: list[str] | None = None,
+    **kwargs: Any
+) -> AIMessage
+```
+
+Async version of `invoke`.
+
+#### stream
+
+```python
+def stream(
+    self,
+    input: LanguageModelInput,
+    config: RunnableConfig | None = None,
+    *,
+    stop: list[str] | None = None,
+    **kwargs: Any
+) -> Iterator[AIMessageChunk]
+```
+
+Stream chat message chunks from the model.
+
+<ResponseField name="return" type="Iterator[AIMessageChunk]">
+  Iterator of message chunks as they are generated
+</ResponseField>
+
+#### astream
+
+```python
+async def astream(
+    self,
+    input: LanguageModelInput,
+    config: RunnableConfig | None = None,
+    *,
+    stop: list[str] | None = None,
+    **kwargs: Any
+) -> AsyncIterator[AIMessageChunk]
+```
+
+Async version of `stream`.
+
+#### batch
+
+```python
+def batch(
+    self,
+    inputs: list[LanguageModelInput],
+    config: RunnableConfig | list[RunnableConfig] | None = None,
+    *,
+    return_exceptions: bool = False,
+    **kwargs: Any
+) -> list[AIMessage]
+```
+
+Batch multiple chat completions.
+
+#### abatch
+
+```python
+async def abatch(
+    self,
+    inputs: list[LanguageModelInput],
+    config: RunnableConfig | list[RunnableConfig] | None = None,
+    *,
+    return_exceptions: bool = False,
+    **kwargs: Any
+) -> list[AIMessage]
+```
+
+Async batch multiple chat completions.
+
+### Tool Calling Methods
+
+#### bind_tools
+
+```python
+def bind_tools(
+    self,
+    tools: Sequence[dict[str, Any] | type | Callable | BaseTool],
+    *,
+    tool_choice: str | dict[str, Any] | bool | None = None,
+    **kwargs: Any
+) -> Runnable[LanguageModelInput, AIMessage]
+```
+
+Bind tools to the model for tool/function calling.
+
+<ParamField path="tools" type="Sequence[dict | type | Callable | BaseTool]" required>
+  Tools to bind. Can be:
+  - Tool dictionaries (OpenAI format)
+  - Pydantic models (converted to JSON schema)
+  - Python functions (converted to tools)
+  - `BaseTool` instances
+</ParamField>
+
+<ParamField path="tool_choice" type="str | dict | bool | None">
+  Which tool to call:
+  - `None`: Model decides
+  - `"auto"`: Model decides (explicit)
+  - `"required"`: Must call a tool
+  - `{"name": "tool_name"}`: Call specific tool
+  - `True`: Same as `"required"`
+</ParamField>
+
+<ResponseField name="return" type="Runnable[LanguageModelInput, AIMessage]">
+  New runnable with tools bound
+</ResponseField>
+
+#### with_structured_output
+
+```python
+def with_structured_output(
+    self,
+    schema: dict | type[BaseModel],
+    *,
+    method: Literal["function_calling", "json_mode"] = "function_calling",
+    include_raw: bool = False,
+    **kwargs: Any
+) -> Runnable[LanguageModelInput, dict | BaseModel]
+```
+
+Create a runnable that returns structured output matching a schema.
+
+<ParamField path="schema" type="dict | type[BaseModel]" required>
+  The schema for output. Can be JSON schema dict or Pydantic model.
+</ParamField>
+
+<ParamField path="method" type="Literal['function_calling', 'json_mode']" default="function_calling">
+  How to extract structured output:
+  - `"function_calling"`: Use tool/function calling
+  - `"json_mode"`: Use JSON mode with parsing
+</ParamField>
+
+<ParamField path="include_raw" type="bool" default="False">
+  If `True`, return both parsed output and raw message
+</ParamField>
+
+<ResponseField name="return" type="Runnable[LanguageModelInput, dict | BaseModel]">
+  Runnable that outputs structured data
+</ResponseField>
+
+### Generation Methods
+
+#### generate_prompt
+
+```python
+def generate_prompt(
+    self,
+    prompts: list[PromptValue],
+    stop: list[str] | None = None,
+    callbacks: Callbacks = None,
+    **kwargs: Any
+) -> LLMResult
+```
+
+Generate completions for multiple prompt values.
+
+<ParamField path="prompts" type="list[PromptValue]" required>
+  List of prompt values to generate from
+</ParamField>
+
+<ResponseField name="return" type="LLMResult">
+  LLM result containing generations and metadata
+</ResponseField>
+
+#### agenerate_prompt
+
+```python
+async def agenerate_prompt(
+    self,
+    prompts: list[PromptValue],
+    stop: list[str] | None = None,
+    callbacks: Callbacks = None,
+    **kwargs: Any
+) -> LLMResult
+```
+
+Async version of `generate_prompt`.
+
+### Implementation Methods
+
+When subclassing `BaseChatModel`, implement these methods:
+
+#### _generate (Required)
+
+```python
+def _generate(
+    self,
+    messages: list[BaseMessage],
+    stop: list[str] | None = None,
+    run_manager: CallbackManagerForLLMRun | None = None,
+    **kwargs: Any
+) -> ChatResult
+```
+
+Generate a chat result from messages. **Must be implemented by subclasses.**
+
+#### _llm_type (Required)
+
+```python
+@property
+def _llm_type(self) -> str
+```
+
+Unique identifier for the model type. **Must be implemented by subclasses.**
+
+#### _stream (Optional)
+
+```python
+def _stream(
+    self,
+    messages: list[BaseMessage],
+    stop: list[str] | None = None,
+    run_manager: CallbackManagerForLLMRun | None = None,
+    **kwargs: Any
+) -> Iterator[ChatGenerationChunk]
+```
+
+Stream message chunks. Override to implement native streaming.
+
+#### _agenerate (Optional)
+
+```python
+async def _agenerate(
+    self,
+    messages: list[BaseMessage],
+    stop: list[str] | None = None,
+    run_manager: AsyncCallbackManagerForLLMRun | None = None,
+    **kwargs: Any
+) -> ChatResult
+```
+
+Async generation. Override to implement native async.
+
+#### _astream (Optional)
+
+```python
+async def _astream(
+    self,
+    messages: list[BaseMessage],
+    stop: list[str] | None = None,
+    run_manager: AsyncCallbackManagerForLLMRun | None = None,
+    **kwargs: Any
+) -> AsyncIterator[ChatGenerationChunk]
+```
+
+Async streaming. Override to implement native async streaming.
+
+## BaseLLM
+
+Base class for traditional large language models with text-in, text-out interfaces.
+
+**Source:** `langchain_core.language_models.llms:292`
+
+**Inherits:** `BaseLanguageModel[str]`, `Runnable`
+
+### Core Methods
+
+#### invoke
+
+```python
+def invoke(
+    self,
+    input: LanguageModelInput,
+    config: RunnableConfig | None = None,
+    *,
+    stop: list[str] | None = None,
+    **kwargs: Any
+) -> str
+```
+
+Generate text completion for an input.
+
+<ParamField path="input" type="str | PromptValue" required>
+  Input text or prompt value
+</ParamField>
+
+<ResponseField name="return" type="str">
+  Generated text
+</ResponseField>
+
+#### stream
+
+```python
+def stream(
+    self,
+    input: LanguageModelInput,
+    config: RunnableConfig | None = None,
+    *,
+    stop: list[str] | None = None,
+    **kwargs: Any
+) -> Iterator[str]
+```
+
+Stream text chunks as they are generated.
+
+<ResponseField name="return" type="Iterator[str]">
+  Iterator of text chunks
+</ResponseField>
+
+#### generate
+
+```python
+def generate(
+    self,
+    prompts: list[str],
+    stop: list[str] | None = None,
+    callbacks: Callbacks = None,
+    **kwargs: Any
+) -> LLMResult
+```
+
+Generate completions for multiple prompts.
+
+<ParamField path="prompts" type="list[str]" required>
+  List of prompt strings
+</ParamField>
+
+<ResponseField name="return" type="LLMResult">
+  Results containing generations and metadata
+</ResponseField>
+
+#### agenerate
+
+```python
+async def agenerate(
+    self,
+    prompts: list[str],
+    stop: list[str] | None = None,
+    callbacks: Callbacks = None,
+    **kwargs: Any
+) -> LLMResult
+```
+
+Async version of `generate`.
+
+### Implementation Methods
+
+#### _generate (Required)
+
+```python
+def _generate(
+    self,
+    prompts: list[str],
+    stop: list[str] | None = None,
+    run_manager: CallbackManagerForLLMRun | None = None,
+    **kwargs: Any
+) -> LLMResult
+```
+
+Generate completions. **Must be implemented by subclasses.**
+
+#### _llm_type (Required)
+
+```python
+@property
+def _llm_type(self) -> str
+```
+
+Unique identifier for the LLM type. **Must be implemented by subclasses.**
+
+#### _stream (Optional)
+
+```python
+def _stream(
+    self,
+    prompt: str,
+    stop: list[str] | None = None,
+    run_manager: CallbackManagerForLLMRun | None = None,
+    **kwargs: Any
+) -> Iterator[GenerationChunk]
+```
+
+Stream generation chunks. Override for native streaming support.
+
+## BaseLanguageModel
+
+Common base class for both chat models and LLMs.
+
+**Source:** `langchain_core.language_models.base`
+
+**Inherits:** `RunnableSerializable[LanguageModelInput, LanguageModelOutput]`
+
+Provides common functionality like caching, callbacks, and serialization.
+
+### Type Aliases
+
+```python
+LanguageModelInput = str | PromptValue | Sequence[BaseMessage | tuple | dict]
+LanguageModelOutput = str | AIMessage
+```

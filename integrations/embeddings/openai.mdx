@@ -1,0 +1,146 @@
+---
+title: "OpenAI Embeddings"
+description: "Embed text using OpenAI's embedding models"
+icon: "chart-network"
+---
+
+The `OpenAIEmbeddings` class provides integration with OpenAI's text embedding models.
+
+## Installation
+
+```bash
+pip install langchain-openai
+```
+
+## Setup
+
+Set your OpenAI API key:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+## Usage
+
+### Basic usage
+
+```python
+from langchain_openai import OpenAIEmbeddings
+
+embed = OpenAIEmbeddings(
+    model="text-embedding-3-large"
+)
+```
+
+### Embed single text
+
+```python
+input_text = "The meaning of life is 42"
+vector = embed.embed_query(input_text)
+print(vector[:3])
+```
+
+```python
+[-0.024603435769677162, -0.007543657906353474, 0.0039630369283258915]
+```
+
+### Embed multiple texts
+
+```python
+vectors = embed.embed_documents(["hello", "goodbye"])
+print(len(vectors))
+print(vectors[0][:3])
+```
+
+```python
+2
+[-0.024603435769677162, -0.007543657906353474, 0.0039630369283258915]
+```
+
+### Async usage
+
+```python
+vector = await embed.aembed_query(input_text)
+print(vector[:3])
+
+# Multiple documents
+vectors = await embed.aembed_documents(["hello", "goodbye"])
+```
+
+## Configuration
+
+### Supported models
+
+- `text-embedding-3-large` - Latest and most capable model (3,072 dimensions)
+- `text-embedding-3-small` - Smaller, faster model (1,536 dimensions)
+- `text-embedding-ada-002` - Legacy model (1,536 dimensions)
+
+### Custom dimensions
+
+With `text-embedding-3` models, you can specify custom output dimensions:
+
+```python
+embed = OpenAIEmbeddings(
+    model="text-embedding-3-large",
+    dimensions=1024
+)
+```
+
+### Advanced options
+
+```python
+embed = OpenAIEmbeddings(
+    model="text-embedding-3-large",
+    dimensions=1024,
+    chunk_size=1000,  # Max texts per batch
+    max_retries=2,
+    request_timeout=60.0,
+    show_progress_bar=True
+)
+```
+
+## OpenAI-compatible APIs
+
+When using non-OpenAI providers (OpenRouter, Ollama, vLLM), set `check_embedding_ctx_length=False`:
+
+```python
+embed = OpenAIEmbeddings(
+    model="your-model",
+    base_url="https://your-api-endpoint.com",
+    check_embedding_ctx_length=False
+)
+```
+
+## Parameters
+
+<ParamField path="model" type="string" default="text-embedding-ada-002">
+  Name of OpenAI model to use.
+</ParamField>
+
+<ParamField path="dimensions" type="integer" optional>
+  Number of dimensions for output embeddings. Only supported in `text-embedding-3` models.
+</ParamField>
+
+<ParamField path="api_key" type="string" optional>
+  OpenAI API key. Automatically inferred from `OPENAI_API_KEY` environment variable if not provided.
+</ParamField>
+
+<ParamField path="base_url" type="string" optional>
+  Base URL for API requests. Useful for proxy or service emulators.
+</ParamField>
+
+<ParamField path="chunk_size" type="integer" default="1000">
+  Maximum number of texts to embed in each batch.
+</ParamField>
+
+<ParamField path="max_retries" type="integer" default="2">
+  Maximum number of retries for API calls.
+</ParamField>
+
+<ParamField path="request_timeout" type="float" optional>
+  Timeout for requests to OpenAI API.
+</ParamField>
+
+<ParamField path="check_embedding_ctx_length" type="boolean" default="true">
+  Whether to check token length and automatically split inputs. Set to `false` for non-OpenAI providers.
+</ParamField>

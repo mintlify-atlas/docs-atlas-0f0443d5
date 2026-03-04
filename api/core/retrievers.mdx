@@ -1,0 +1,384 @@
+---
+title: Retrievers
+description: Base classes for document retrieval
+---
+
+## Overview
+
+Retrievers return `Document` objects given a text query. They provide a standard interface for retrieving relevant documents from various sources.
+
+## BaseRetriever
+
+Abstract base class for document retrieval systems.
+
+**Source:** `langchain_core.retrievers:55`
+
+**Inherits:** `RunnableSerializable[str, list[Document]]`
+
+### Type Aliases
+
+```python
+RetrieverInput = str
+RetrieverOutput = list[Document]
+```
+
+### Properties
+
+<ResponseField name="tags" type="list[str] | None" default="None">
+  Optional tags associated with the retriever for callbacks and tracing
+</ResponseField>
+
+<ResponseField name="metadata" type="dict[str, Any] | None" default="None">
+  Optional metadata associated with the retriever for callbacks and tracing
+</ResponseField>
+
+### Core Methods
+
+#### invoke
+
+```python
+def invoke(
+    self,
+    input: str,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> list[Document]
+```
+
+Retrieve documents relevant to a query.
+
+<ParamField path="input" type="str" required>
+  The query string
+</ParamField>
+
+<ParamField path="config" type="RunnableConfig | None">
+  Configuration for callbacks, tags, metadata
+</ParamField>
+
+<ParamField path="**kwargs" type="Any">
+  Additional arguments passed to the retriever
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  List of relevant documents
+</ResponseField>
+
+#### ainvoke
+
+```python
+async def ainvoke(
+    self,
+    input: str,
+    config: RunnableConfig | None = None,
+    **kwargs: Any
+) -> list[Document]
+```
+
+Async version of `invoke`.
+
+#### batch
+
+```python
+def batch(
+    self,
+    inputs: list[str],
+    config: RunnableConfig | list[RunnableConfig] | None = None,
+    *,
+    return_exceptions: bool = False,
+    **kwargs: Any
+) -> list[list[Document]]
+```
+
+Batch retrieve documents for multiple queries.
+
+<ParamField path="inputs" type="list[str]" required>
+  List of query strings
+</ParamField>
+
+<ResponseField name="return" type="list[list[Document]]">
+  List of document lists, one per query
+</ResponseField>
+
+#### abatch
+
+```python
+async def abatch(
+    self,
+    inputs: list[str],
+    config: RunnableConfig | list[RunnableConfig] | None = None,
+    *,
+    return_exceptions: bool = False,
+    **kwargs: Any
+) -> list[list[Document]]
+```
+
+Async batch retrieval.
+
+### Implementation Methods
+
+When subclassing `BaseRetriever`, implement these methods:
+
+#### _get_relevant_documents (Required)
+
+```python
+def _get_relevant_documents(
+    self,
+    query: str,
+    *,
+    run_manager: CallbackManagerForRetrieverRun | None = None
+) -> list[Document]
+```
+
+Retrieve documents relevant to a query. **Must be implemented by subclasses.**
+
+<ParamField path="query" type="str" required>
+  The query string
+</ParamField>
+
+<ParamField path="run_manager" type="CallbackManagerForRetrieverRun | None">
+  Callback manager for the retriever run
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  List of relevant documents
+</ResponseField>
+
+#### _aget_relevant_documents (Optional)
+
+```python
+async def _aget_relevant_documents(
+    self,
+    query: str,
+    *,
+    run_manager: AsyncCallbackManagerForRetrieverRun | None = None
+) -> list[Document]
+```
+
+Async version of `_get_relevant_documents`. Override for native async support.
+
+### Example Implementation
+
+```python
+from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
+
+class SimpleRetriever(BaseRetriever):
+    """Retriever that returns the first k documents from a list."""
+    
+    docs: list[Document]
+    k: int = 5
+    
+    def _get_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: CallbackManagerForRetrieverRun | None = None
+    ) -> list[Document]:
+        """Return the first k documents."""
+        return self.docs[:self.k]
+    
+    async def _aget_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: AsyncCallbackManagerForRetrieverRun | None = None
+    ) -> list[Document]:
+        """Async version."""
+        return self.docs[:self.k]
+
+# Usage
+retriever = SimpleRetriever(
+    docs=[Document(page_content="doc1"), Document(page_content="doc2")],
+    k=1
+)
+results = retriever.invoke("query")
+```
+
+## VectorStoreRetriever
+
+Retriever that uses a vector store for similarity search.
+
+**Source:** `langchain_core.vectorstores.base`
+
+**Inherits:** `BaseRetriever`
+
+### Properties
+
+<ResponseField name="vectorstore" type="VectorStore" required>
+  The vector store to retrieve from
+</ResponseField>
+
+<ResponseField name="search_type" type="Literal['similarity', 'mmr', 'similarity_score_threshold']" default="'similarity'">
+  Type of search to perform:
+  - `'similarity'`: Standard similarity search
+  - `'mmr'`: Maximum marginal relevance (diverse results)
+  - `'similarity_score_threshold'`: Filter by minimum similarity score
+</ResponseField>
+
+<ResponseField name="search_kwargs" type="dict[str, Any]" default="{}">
+  Additional keyword arguments for search. Common keys:
+  - `k`: Number of documents to retrieve
+  - `score_threshold`: Minimum similarity score (for `'similarity_score_threshold'`)
+  - `fetch_k`: Number of documents to fetch before MMR (for `'mmr'`)
+  - `lambda_mult`: Diversity parameter for MMR (for `'mmr'`)
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.vectorstores import VectorStore
+
+# From a vector store
+retriever = vectorstore.as_retriever(
+    search_type="similarity",
+    search_kwargs={"k": 5}
+)
+
+docs = retriever.invoke("What is LangChain?")
+
+# MMR for diverse results
+retriever = vectorstore.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 5, "fetch_k": 20, "lambda_mult": 0.5}
+)
+
+# With score threshold
+retriever = vectorstore.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={"score_threshold": 0.8}
+)
+```
+
+## MultiQueryRetriever
+
+Generate multiple queries and retrieve documents for each.
+
+**Source:** `langchain.retrievers.multi_query`
+
+**Inherits:** `BaseRetriever`
+
+Generates multiple perspectives on a query and retrieves documents for each, combining results.
+
+### Properties
+
+<ResponseField name="retriever" type="BaseRetriever" required>
+  The base retriever to use for each generated query
+</ResponseField>
+
+<ResponseField name="llm_chain" type="Runnable" required>
+  LLM chain to generate alternative queries
+</ResponseField>
+
+<ResponseField name="parser_key" type="str" default="'lines'">
+  Key to extract queries from LLM output
+</ResponseField>
+
+## ContextualCompressionRetriever
+
+Compress retrieved documents using a document compressor.
+
+**Source:** `langchain.retrievers.contextual_compression`
+
+**Inherits:** `BaseRetriever`
+
+### Properties
+
+<ResponseField name="base_retriever" type="BaseRetriever" required>
+  The base retriever to get initial documents
+</ResponseField>
+
+<ResponseField name="base_compressor" type="BaseDocumentCompressor" required>
+  Compressor to filter or compress retrieved documents
+</ResponseField>
+
+## ParentDocumentRetriever
+
+Retrieve smaller chunks but return larger parent documents.
+
+**Source:** `langchain.retrievers.parent_document_retriever`
+
+**Inherits:** `BaseRetriever`
+
+Retrieves small chunks for better search, but returns full parent documents for context.
+
+### Properties
+
+<ResponseField name="vectorstore" type="VectorStore" required>
+  Vector store containing child chunks
+</ResponseField>
+
+<ResponseField name="docstore" type="BaseStore" required>
+  Store containing parent documents
+</ResponseField>
+
+<ResponseField name="child_splitter" type="TextSplitter" required>
+  Splitter to create child chunks
+</ResponseField>
+
+<ResponseField name="parent_splitter" type="TextSplitter | None" default="None">
+  Optional splitter to create parent documents
+</ResponseField>
+
+## EnsembleRetriever
+
+Combine multiple retrievers using weighted reciprocal rank fusion.
+
+**Source:** `langchain.retrievers.ensemble`
+
+**Inherits:** `BaseRetriever`
+
+### Properties
+
+<ResponseField name="retrievers" type="list[BaseRetriever]" required>
+  List of retrievers to combine
+</ResponseField>
+
+<ResponseField name="weights" type="list[float]" required>
+  Weights for each retriever (must sum to 1.0)
+</ResponseField>
+
+<ResponseField name="c" type="int" default="60">
+  Constant for reciprocal rank fusion
+</ResponseField>
+
+## RetrieverLike
+
+Type alias for objects that can act as retrievers.
+
+**Source:** `langchain_core.retrievers`
+
+```python
+RetrieverLike = Runnable[str, list[Document]]
+```
+
+Any `Runnable` that takes a string and returns documents can be used as a retriever.
+
+## LangSmithRetrieverParams
+
+Parameters for LangSmith tracing of retrievers.
+
+**Source:** `langchain_core.retrievers:39`
+
+```python
+class LangSmithRetrieverParams(TypedDict, total=False):
+    ls_retriever_name: str
+    ls_vector_store_provider: str | None
+    ls_embedding_provider: str | None
+    ls_embedding_model: str | None
+```
+
+<ParamField path="ls_retriever_name" type="str">
+  Name of the retriever for tracing
+</ParamField>
+
+<ParamField path="ls_vector_store_provider" type="str | None">
+  Vector store provider name
+</ParamField>
+
+<ParamField path="ls_embedding_provider" type="str | None">
+  Embedding provider name
+</ParamField>
+
+<ParamField path="ls_embedding_model" type="str | None">
+  Embedding model name
+</ParamField>

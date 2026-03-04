@@ -1,0 +1,670 @@
+---
+title: Tools
+description: Building and integrating tools for agent actions and model interactions
+---
+
+Tools are functions that agents and language models can invoke to interact with external systems, perform computations, or retrieve information. LangChain provides a flexible system for defining, validating, and executing tools.
+
+## Tool Basics
+
+Tools in LangChain are defined using the `@tool` decorator or by extending `BaseTool`:
+
+### Simple Tool with Decorator
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate a mathematical expression.
+    
+    Args:
+        expression: A valid Python math expression (e.g., "2 + 2", "10 * 5")
+    """
+    try:
+        result = eval(expression)
+        return str(result)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Use the tool
+result = calculator.invoke({"expression": "25 * 4"})
+print(result)  # "100"
+```
+
+The `@tool` decorator automatically:
+- Extracts the function name as tool name
+- Uses the docstring as tool description
+- Infers parameter schema from type hints
+- Creates a `BaseTool` subclass
+
+See: `/libs/core/langchain_core/tools/base.py`
+
+### Tool with Pydantic Schema
+
+For complex inputs, use Pydantic models:
+
+```python
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
+
+class SearchInput(BaseModel):
+    """Input schema for search tool."""
+    query: str = Field(description="Search query string")
+    max_results: int = Field(default=5, description="Maximum number of results", ge=1, le=20)
+    include_snippets: bool = Field(default=True, description="Include text snippets")
+
+@tool(args_schema=SearchInput)
+def search(query: str, max_results: int = 5, include_snippets: bool = True) -> str:
+    """Search for information on the web.
+    
+    Returns formatted search results with titles and URLs.
+    """
+    # Search implementation
+    return f"Found {max_results} results for '{query}'"
+
+# Tool automatically validates inputs
+result = search.invoke({
+    "query": "LangChain documentation",
+    "max_results": 10
+})
+```
+
+See schema creation in `/libs/core/langchain_core/tools/base.py:289`
+
+## BaseTool Class
+
+For more control, extend `BaseTool` directly:
+
+```python
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
+from typing import Optional
+
+class WeatherInput(BaseModel):
+    location: str = Field(description="City name or ZIP code")
+    units: str = Field(default="fahrenheit", description="Temperature units")
+
+class WeatherTool(BaseTool):
+    name: str = "get_weather"
+    description: str = "Get current weather for a location"
+    args_schema: type[BaseModel] = WeatherInput
+    
+    def _run(self, location: str, units: str = "fahrenheit") -> str:
+        """Synchronous implementation."""
+        # Call weather API
+        return f"Weather in {location}: 72°{units[0].upper()}, Sunny"
+    
+    async def _arun(self, location: str, units: str = "fahrenheit") -> str:
+        """Async implementation."""
+        # Async API call
+        return f"Weather in {location}: 72°{units[0].upper()}, Sunny"
+
+tool = WeatherTool()
+result = tool.invoke({"location": "San Francisco"})
+print(result)  # "Weather in San Francisco: 72°F, Sunny"
+```
+
+## Tool Properties
+
+Every tool has these key properties:
+
+### name
+
+Unique identifier for the tool:
+
+```python
+@tool
+def my_tool(x: int) -> int:
+    """Double a number."""
+    return x * 2
+
+print(my_tool.name)  # "my_tool"
+```
+
+Override the name:
+
+```python
+@tool("custom_name")
+def my_tool(x: int) -> int:
+    """Double a number."""
+    return x * 2
+
+print(my_tool.name)  # "custom_name"
+```
+
+### description
+
+Helps the LLM understand when to use the tool:
+
+```python
+@tool
+def search_docs(query: str) -> str:
+    """Search LangChain documentation for relevant information.
+    
+    Use this when the user asks about:
+    - LangChain features and capabilities
+    - Code examples and tutorials
+    - API reference and function signatures
+    
+    Do not use for:
+    - General web search
+    - Real-time information
+    - Non-LangChain topics
+    """
+    return search_api(query)
+
+print(search_docs.description)
+```
+
+<Tip>
+Clear, detailed descriptions significantly improve agent performance. Include:
+- What the tool does
+- When to use it
+- When NOT to use it
+- Parameter requirements
+</Tip>
+
+### args_schema
+
+Pydantic model defining input validation:
+
+```python
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field, field_validator
+
+class CalculatorInput(BaseModel):
+    expression: str = Field(
+        description="Mathematical expression to evaluate",
+        min_length=1,
+        max_length=200
+    )
+    
+    @field_validator("expression")
+    @classmethod
+    def validate_expression(cls, v: str) -> str:
+        # Only allow safe math operations
+        allowed = set("0123456789+-*/(). ")
+        if not all(c in allowed for c in v):
+            raise ValueError("Expression contains invalid characters")
+        return v
+
+@tool(args_schema=CalculatorInput)
+def calculator(expression: str) -> str:
+    """Evaluate math expressions."""
+    return str(eval(expression))
+
+# Schema used for validation
+print(calculator.args_schema.model_json_schema())
+```
+
+See: `/libs/core/langchain_core/tools/base.py:289`
+
+## Tool Invocation
+
+Tools are Runnables and support standard invocation methods:
+
+### invoke / ainvoke
+
+```python
+@tool
+def greet(name: str) -> str:
+    """Greet someone by name."""
+    return f"Hello, {name}!"
+
+# Synchronous
+result = greet.invoke({"name": "Alice"})
+print(result)  # "Hello, Alice!"
+
+# Asynchronous
+result = await greet.ainvoke({"name": "Bob"})
+```
+
+### batch / abatch
+
+```python
+inputs = [
+    {"expression": "2 + 2"},
+    {"expression": "5 * 5"},
+    {"expression": "10 - 3"}
+]
+
+results = calculator.batch(inputs)
+print(results)  # ["4", "25", "7"]
+```
+
+### With Configuration
+
+```python
+from langchain_core.runnables import RunnableConfig
+
+result = tool.invoke(
+    {"query": "search term"},
+    config=RunnableConfig(
+        tags=["production"],
+        metadata={"user_id": "123"}
+    )
+)
+```
+
+## Tool Integration with Models
+
+### Binding Tools to Models
+
+Modern chat models support native tool calling:
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+@tool
+def get_weather(location: str) -> str:
+    """Get current weather."""
+    return f"Weather in {location}: Sunny, 72°F"
+
+@tool
+def get_time(timezone: str = "UTC") -> str:
+    """Get current time."""
+    from datetime import datetime
+    return datetime.now().strftime("%H:%M:%S")
+
+# Bind tools to model
+model = ChatOpenAI(model="gpt-4")
+model_with_tools = model.bind_tools([get_weather, get_time])
+
+# Model can now request tool calls
+response = model_with_tools.invoke("What's the weather in NYC?")
+print(response.tool_calls)
+# [{'name': 'get_weather', 'args': {'location': 'NYC'}, 'id': 'call_...'}]
+```
+
+### Executing Tool Calls
+
+Handle tool call responses:
+
+```python
+from langchain_core.messages import HumanMessage, ToolMessage
+
+messages = [HumanMessage(content="What's the weather in SF?")]
+
+# Get AI response with tool calls
+ai_message = model_with_tools.invoke(messages)
+messages.append(ai_message)
+
+# Execute each tool call
+for tool_call in ai_message.tool_calls:
+    tool_name = tool_call["name"]
+    tool_args = tool_call["args"]
+    
+    # Find and invoke the tool
+    if tool_name == "get_weather":
+        result = get_weather.invoke(tool_args)
+    elif tool_name == "get_time":
+        result = get_time.invoke(tool_args)
+    
+    # Add tool result to messages
+    messages.append(ToolMessage(
+        content=result,
+        tool_call_id=tool_call["id"]
+    ))
+
+# Get final response
+final_response = model_with_tools.invoke(messages)
+print(final_response.content)  # "The weather in SF is sunny and 72°F"
+```
+
+### Tool Choice Control
+
+Force or prevent tool usage:
+
+```python
+# Force tool usage (must call a tool)
+model_with_tools = model.bind_tools(
+    [get_weather, get_time],
+    tool_choice="required"
+)
+
+# Force specific tool
+model_with_tools = model.bind_tools(
+    [get_weather, get_time],
+    tool_choice={"type": "tool", "name": "get_weather"}
+)
+
+# Disable tools (regular response)
+model_with_tools = model.bind_tools(
+    [get_weather, get_time],
+    tool_choice="none"
+)
+```
+
+## Structured Tools
+
+For tools that return structured data:
+
+```python
+from langchain_core.tools import StructuredTool
+from pydantic import BaseModel
+
+class UserInfo(BaseModel):
+    name: str
+    email: str
+    age: int
+
+class GetUserInput(BaseModel):
+    user_id: str
+
+def get_user(user_id: str) -> UserInfo:
+    # Database lookup
+    return UserInfo(
+        name="Alice",
+        email="alice@example.com",
+        age=30
+    )
+
+tool = StructuredTool.from_function(
+    func=get_user,
+    name="get_user",
+    description="Retrieve user information by ID",
+    args_schema=GetUserInput,
+)
+
+result = tool.invoke({"user_id": "123"})
+print(result)  # UserInfo object
+```
+
+See: `/libs/core/langchain_core/tools/structured.py`
+
+## Tool Error Handling
+
+Handle tool failures gracefully:
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def divide(a: float, b: float) -> str:
+    """Divide two numbers.
+    
+    Args:
+        a: Numerator
+        b: Denominator (must be non-zero)
+    """
+    try:
+        if b == 0:
+            return "Error: Cannot divide by zero"
+        result = a / b
+        return f"Result: {result}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Tool returns error message instead of raising
+result = divide.invoke({"a": 10, "b": 0})
+print(result)  # "Error: Cannot divide by zero"
+```
+
+For tools that should raise exceptions:
+
+```python
+@tool(handle_tool_error=True)
+def risky_operation(value: int) -> str:
+    """Operation that might fail."""
+    if value < 0:
+        raise ValueError("Value must be positive")
+    return f"Result: {value * 2}"
+
+# Exceptions are caught and returned as error messages
+result = risky_operation.invoke({"value": -5})
+print(result)  # "Error: Value must be positive"
+```
+
+## Retriever Tools
+
+Convert retrievers to tools:
+
+```python
+from langchain_core.tools import create_retriever_tool
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+
+# Create vector store retriever
+vectorstore = FAISS.from_texts(
+    ["LangChain is a framework", "Python is a language"],
+    embedding=OpenAIEmbeddings()
+)
+retriever = vectorstore.as_retriever()
+
+# Convert to tool
+retriever_tool = create_retriever_tool(
+    retriever,
+    name="search_docs",
+    description="Search documentation for relevant information"
+)
+
+# Use like any other tool
+result = retriever_tool.invoke({"query": "What is LangChain?"})
+```
+
+See: `/libs/core/langchain_core/tools/retriever.py`
+
+## Tool Rendering
+
+Convert tools to various formats:
+
+### OpenAI Format
+
+```python
+from langchain_core.utils.function_calling import convert_to_openai_tool
+
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate math expressions."""
+    return str(eval(expression))
+
+openai_format = convert_to_openai_tool(calculator)
+print(openai_format)
+# {
+#   "type": "function",
+#   "function": {
+#     "name": "calculator",
+#     "description": "Evaluate math expressions.",
+#     "parameters": {...}
+#   }
+# }
+```
+
+### JSON Schema
+
+```python
+schema = calculator.args_schema.model_json_schema()
+print(schema)
+# {
+#   "type": "object",
+#   "properties": {
+#     "expression": {"type": "string", ...}
+#   },
+#   "required": ["expression"]
+# }
+```
+
+## Advanced Tool Patterns
+
+### Stateful Tools
+
+Tools that maintain state:
+
+```python
+from langchain_core.tools import BaseTool
+from pydantic import Field
+
+class Counter(BaseTool):
+    name: str = "counter"
+    description: str = "Increment and return a counter"
+    count: int = Field(default=0)
+    
+    def _run(self) -> str:
+        self.count += 1
+        return f"Count: {self.count}"
+
+counter = Counter()
+print(counter.invoke({}))  # "Count: 1"
+print(counter.invoke({}))  # "Count: 2"
+```
+
+### Tool with Callbacks
+
+```python
+from langchain_core.callbacks import CallbackManagerForToolRun
+
+class VerboseTool(BaseTool):
+    name: str = "verbose_tool"
+    description: str = "A tool that logs its execution"
+    
+    def _run(
+        self,
+        query: str,
+        run_manager: CallbackManagerForToolRun | None = None
+    ) -> str:
+        if run_manager:
+            run_manager.on_text(f"Processing: {query}\n")
+        
+        result = f"Result for {query}"
+        
+        if run_manager:
+            run_manager.on_text(f"Completed: {result}\n")
+        
+        return result
+```
+
+### Tool Composition
+
+Compose tools with other Runnables:
+
+```python
+from langchain_core.runnables import RunnableLambda
+
+@tool
+def fetch_data(url: str) -> str:
+    """Fetch data from URL."""
+    return f"Data from {url}"
+
+def parse_data(data: str) -> dict:
+    return {"parsed": data.upper()}
+
+# Compose tool with processing
+chain = fetch_data | RunnableLambda(parse_data)
+result = chain.invoke({"url": "https://example.com"})
+```
+
+## Best Practices
+
+<Accordion title="Write clear tool descriptions">
+The description is critical for LLM tool selection:
+
+```python
+@tool
+def search(query: str) -> str:
+    """Search for current information on the web.
+    
+    Use this tool when you need:
+    - Recent news or events (last 24 hours)
+    - Real-time data (stock prices, weather)
+    - Information not in your training data
+    - Verification of facts
+    
+    Do NOT use for:
+    - General knowledge questions
+    - Mathematical calculations
+    - Code generation
+    
+    Args:
+        query: Specific search terms. Be precise and use keywords.
+    
+    Returns:
+        Top search results with titles, snippets, and URLs.
+    """
+    return search_api(query)
+```
+</Accordion>
+
+<Accordion title="Validate inputs with Pydantic">
+Use Pydantic models for type safety:
+
+```python
+from pydantic import BaseModel, Field, field_validator
+
+class EmailInput(BaseModel):
+    to: str = Field(description="Recipient email")
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1)
+    
+    @field_validator("to")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if "@" not in v:
+            raise ValueError("Invalid email address")
+        return v
+
+@tool(args_schema=EmailInput)
+def send_email(to: str, subject: str, body: str) -> str:
+    """Send an email."""
+    # Email sending logic
+    return "Email sent"
+```
+</Accordion>
+
+<Accordion title="Return user-friendly messages">
+Tool outputs should be clear and actionable:
+
+```python
+@tool
+def database_query(sql: str) -> str:
+    """Execute SQL query."""
+    try:
+        results = db.execute(sql)
+        if not results:
+            return "Query executed successfully. No rows returned."
+        return f"Found {len(results)} rows:\n{format_results(results)}"
+    except Exception as e:
+        return f"Query failed: {str(e)}\nPlease check the SQL syntax."
+```
+</Accordion>
+
+<Accordion title="Keep tool scope focused">
+Single-purpose tools are easier for LLMs to use correctly:
+
+```python
+# Good: Focused tools
+@tool
+def get_user_email(user_id: str) -> str:
+    """Get user email address."""
+    return db.get_user(user_id).email
+
+@tool
+def get_user_age(user_id: str) -> int:
+    """Get user age."""
+    return db.get_user(user_id).age
+
+# Avoid: Kitchen sink tools
+@tool
+def get_user_data(user_id: str, field: str) -> Any:
+    """Get any user field."""
+    return getattr(db.get_user(user_id), field)
+```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Agents" icon="robot" href="/concepts/agents">
+    Build agents that use tools dynamically
+  </Card>
+  <Card title="Runnables" icon="link" href="/concepts/runnables">
+    Compose tools with other components
+  </Card>
+  <Card title="Messages" icon="message" href="/concepts/messages">
+    Handle tool messages in conversations
+  </Card>
+  <Card title="LangGraph" icon="diagram-project" href="https://langchain-ai.github.io/langgraph/">
+    Build advanced tool-using systems
+  </Card>
+</CardGroup>

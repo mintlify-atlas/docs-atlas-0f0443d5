@@ -1,0 +1,508 @@
+---
+title: Qdrant
+---
+
+Qdrant is an open-source, high-performance vector database designed for semantic search and similarity matching. It supports multiple vector configurations, filtering, and both in-memory and persistent storage.
+
+## Installation
+
+Install the required packages:
+
+```bash
+pip install -qU langchain-qdrant
+```
+
+## Setup
+
+Qdrant offers two main classes:
+
+- `QdrantVectorStore`: Modern, recommended implementation
+- `Qdrant`: Legacy class (deprecated, but still supported)
+
+### QdrantVectorStore (Recommended)
+
+```python
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import Distance, VectorParams
+from langchain_openai import OpenAIEmbeddings
+
+client = QdrantClient(":memory:")  # In-memory instance
+
+# Create collection
+client.create_collection(
+    collection_name="demo_collection",
+    vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+)
+
+vector_store = QdrantVectorStore(
+    client=client,
+    collection_name="demo_collection",
+    embedding=OpenAIEmbeddings(),
+)
+```
+
+### Connection Options
+
+#### In-Memory
+
+```python
+client = QdrantClient(":memory:")
+```
+
+#### Local Persistent Storage
+
+```python
+client = QdrantClient(path="./qdrant_data")
+```
+
+#### Remote Server
+
+```python
+client = QdrantClient(
+    url="http://localhost:6333",
+    api_key="your-api-key",  # Optional
+)
+```
+
+#### Qdrant Cloud
+
+```python
+client = QdrantClient(
+    url="https://your-cluster.qdrant.io",
+    api_key="your-api-key",
+)
+```
+
+## Usage
+
+### Adding Documents
+
+Add documents with metadata:
+
+```python
+from langchain_core.documents import Document
+from uuid import uuid4
+
+documents = [
+    Document(page_content="foo", metadata={"baz": "bar"}),
+    Document(page_content="thud", metadata={"bar": "baz"}),
+]
+
+ids = [str(uuid4()) for _ in documents]
+vector_store.add_documents(documents=documents, ids=ids)
+```
+
+### Creating from Texts
+
+```python
+from langchain_qdrant import Qdrant
+from langchain_openai import OpenAIEmbeddings
+
+texts = ["foo", "bar", "baz"]
+metadatas = [{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}]
+
+vector_store = Qdrant.from_texts(
+    texts=texts,
+    embedding=OpenAIEmbeddings(),
+    metadatas=metadatas,
+    collection_name="my_collection",
+    path="./qdrant_data",  # For persistent storage
+)
+```
+
+### Similarity Search
+
+Find similar documents:
+
+```python
+results = vector_store.similarity_search(
+    query="thud",
+    k=2,
+)
+
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+### Search with Score
+
+```python
+results = vector_store.similarity_search_with_score(
+    query="qux",
+    k=2,
+)
+
+for doc, score in results:
+    print(f"* [SIM={score:.3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+### Search with Metadata Filter
+
+Qdrant supports powerful metadata filtering:
+
+```python
+from qdrant_client.http import models
+
+results = vector_store.similarity_search(
+    query="thud",
+    k=1,
+    filter=models.Filter(
+        must=[
+            models.FieldCondition(
+                key="metadata.bar",
+                match=models.MatchValue(value="baz"),
+            )
+        ]
+    ),
+)
+```
+
+### Maximal Marginal Relevance (MMR)
+
+MMR optimizes for both similarity and diversity:
+
+```python
+results = vector_store.max_marginal_relevance_search(
+    query="thud",
+    k=2,
+    fetch_k=10,
+    lambda_mult=0.5,  # 0 = max diversity, 1 = min diversity
+)
+```
+
+## Key Methods
+
+### add_documents
+
+Add documents to the vector store:
+
+```python
+vector_store.add_documents(
+    documents=documents,
+    ids=ids,  # Optional, must be UUID-like strings
+    batch_size=64,  # Upload batch size
+)
+```
+
+### add_texts
+
+Add raw texts:
+
+```python
+vector_store.add_texts(
+    texts=["text1", "text2"],
+    metadatas=[{"key": "value"}],
+    ids=["id1", "id2"],
+)
+```
+
+### similarity_search
+
+Find similar documents:
+
+```python
+vector_store.similarity_search(
+    query="search query",
+    k=4,
+    filter=None,  # Qdrant filter
+    search_params=None,  # Additional search parameters
+    offset=0,  # Pagination offset
+    score_threshold=None,  # Minimum score threshold
+)
+```
+
+### similarity_search_by_vector
+
+Search using an embedding vector:
+
+```python
+embedding = [0.1, 0.2, 0.3, ...]  # Your embedding vector
+results = vector_store.similarity_search_by_vector(
+    embedding=embedding,
+    k=4,
+)
+```
+
+### delete
+
+Delete documents by ID:
+
+```python
+vector_store.delete(ids=["id1", "id2"])
+```
+
+## Advanced Features
+
+### Hybrid Search (Dense + Sparse)
+
+Qdrant supports hybrid search with both dense and sparse vectors:
+
+```python
+from langchain_qdrant import QdrantVectorStore, RetrievalMode, FastEmbedSparse
+from langchain_openai import OpenAIEmbeddings
+
+vector_store = QdrantVectorStore(
+    client=client,
+    collection_name="hybrid_collection",
+    embedding=OpenAIEmbeddings(),
+    sparse_embedding=FastEmbedSparse(model_name="Qdrant/bm25"),
+    retrieval_mode=RetrievalMode.HYBRID,
+)
+```
+
+Retrieval modes:
+- `RetrievalMode.DENSE`: Standard dense vector search (default)
+- `RetrievalMode.SPARSE`: Sparse vector search only
+- `RetrievalMode.HYBRID`: Combines dense and sparse vectors
+
+### Named Vectors
+
+Store multiple vectors per document:
+
+```python
+vector_store = Qdrant(
+    client=client,
+    collection_name="multi_vector_collection",
+    embeddings=OpenAIEmbeddings(),
+    vector_name="openai_embedding",
+)
+```
+
+### Search Parameters
+
+Customize search behavior:
+
+```python
+from qdrant_client.http import models
+
+search_params = models.SearchParams(
+    hnsw_ef=128,  # Size of the dynamic list for search
+    exact=False,  # Use exact search (slower but more accurate)
+)
+
+results = vector_store.similarity_search(
+    query="thud",
+    k=5,
+    search_params=search_params,
+)
+```
+
+### Score Threshold
+
+Filter results by minimum similarity score:
+
+```python
+results = vector_store.similarity_search(
+    query="thud",
+    k=10,
+    score_threshold=0.8,  # Only return results with score >= 0.8
+)
+```
+
+### Read Consistency
+
+Control consistency for distributed deployments:
+
+```python
+from qdrant_client.http import models
+
+results = vector_store.similarity_search(
+    query="thud",
+    k=5,
+    consistency=models.ReadConsistency.MAJORITY,  # or 'all', 'quorum', int
+)
+```
+
+### As Retriever
+
+Use Qdrant as a retriever in chains:
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 5, "fetch_k": 20, "lambda_mult": 0.5},
+)
+
+docs = retriever.invoke("query")
+```
+
+## Async Support
+
+Qdrant supports async operations:
+
+```python
+from qdrant_client import AsyncQdrantClient
+
+async_client = AsyncQdrantClient(":memory:")
+
+vector_store = Qdrant(
+    client=client,
+    async_client=async_client,
+    collection_name="async_collection",
+    embeddings=OpenAIEmbeddings(),
+)
+
+# Add documents
+await vector_store.aadd_documents(documents=documents, ids=ids)
+
+# Search
+results = await vector_store.asimilarity_search(query="thud", k=1)
+
+# Search with score
+results = await vector_store.asimilarity_search_with_score(query="qux", k=1)
+
+# MMR search
+results = await vector_store.amax_marginal_relevance_search(query="thud", k=5)
+
+# Delete
+await vector_store.adelete(ids=["id1"])
+```
+
+## Collection Configuration
+
+### Distance Metrics
+
+```python
+from qdrant_client.http.models import Distance, VectorParams
+
+client.create_collection(
+    collection_name="my_collection",
+    vectors_config=VectorParams(
+        size=1536,
+        distance=Distance.COSINE,  # or Distance.EUCLID, Distance.DOT
+    ),
+)
+```
+
+Available distance metrics:
+- `Distance.COSINE`: Cosine similarity
+- `Distance.EUCLID`: Euclidean distance
+- `Distance.DOT`: Dot product
+- `Distance.MANHATTAN`: Manhattan distance
+
+### HNSW Configuration
+
+Optimize the HNSW index:
+
+```python
+from qdrant_client.http.models import HnswConfigDiff
+
+vector_store = Qdrant.from_texts(
+    texts=texts,
+    embedding=OpenAIEmbeddings(),
+    collection_name="optimized_collection",
+    path="./qdrant_data",
+    hnsw_config=HnswConfigDiff(
+        m=16,  # Number of edges per node
+        ef_construct=100,  # Size of dynamic list during construction
+    ),
+)
+```
+
+### Sharding and Replication
+
+```python
+vector_store = Qdrant.from_texts(
+    texts=texts,
+    embedding=OpenAIEmbeddings(),
+    collection_name="distributed_collection",
+    url="http://localhost:6333",
+    shard_number=2,  # Number of shards
+    replication_factor=2,  # Number of replicas
+)
+```
+
+## Filtering Examples
+
+### Simple Equality Filter
+
+```python
+from qdrant_client.http import models
+
+filter = models.Filter(
+    must=[
+        models.FieldCondition(
+            key="metadata.category",
+            match=models.MatchValue(value="science"),
+        )
+    ]
+)
+
+results = vector_store.similarity_search(query="physics", k=5, filter=filter)
+```
+
+### Range Filter
+
+```python
+filter = models.Filter(
+    must=[
+        models.FieldCondition(
+            key="metadata.year",
+            range=models.Range(gte=2020, lte=2023),
+        )
+    ]
+)
+```
+
+### Multiple Conditions
+
+```python
+filter = models.Filter(
+    must=[
+        models.FieldCondition(
+            key="metadata.language",
+            match=models.MatchValue(value="en"),
+        ),
+        models.FieldCondition(
+            key="metadata.verified",
+            match=models.MatchValue(value=True),
+        ),
+    ]
+)
+```
+
+### OR Conditions
+
+```python
+filter = models.Filter(
+    should=[
+        models.FieldCondition(
+            key="metadata.category",
+            match=models.MatchValue(value="science"),
+        ),
+        models.FieldCondition(
+            key="metadata.category",
+            match=models.MatchValue(value="technology"),
+        ),
+    ]
+)
+```
+
+## Migration from Legacy Qdrant Class
+
+If you're using the deprecated `Qdrant` class, migrate to `QdrantVectorStore`:
+
+```python
+# Old (deprecated)
+from langchain_qdrant import Qdrant
+
+vector_store = Qdrant(
+    client=client,
+    collection_name="my_collection",
+    embeddings=OpenAIEmbeddings(),
+)
+
+# New (recommended)
+from langchain_qdrant import QdrantVectorStore
+
+vector_store = QdrantVectorStore(
+    client=client,
+    collection_name="my_collection",
+    embedding=OpenAIEmbeddings(),  # Note: 'embedding' not 'embeddings'
+)
+```
+
+## API Reference
+
+For detailed API information, see the [Qdrant integration documentation](https://docs.langchain.com/oss/python/integrations/providers/qdrant).

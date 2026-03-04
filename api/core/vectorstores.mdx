@@ -1,0 +1,587 @@
+---
+title: Vector Stores
+description: Interfaces for vector storage and similarity search
+---
+
+## Overview
+
+Vector stores store embedded data and perform vector search. They enable semantic search over unstructured data by embedding content and retrieving the most similar items.
+
+## VectorStore
+
+Abstract base class for vector store implementations.
+
+**Source:** `langchain_core.vectorstores.base:43`
+
+### Properties
+
+<ResponseField name="embeddings" type="Embeddings | None">
+  The embedding model used by the vector store. Returns `None` if not implemented.
+</ResponseField>
+
+### Document Management
+
+#### add_texts
+
+```python
+def add_texts(
+    self,
+    texts: Iterable[str],
+    metadatas: list[dict] | None = None,
+    *,
+    ids: list[str] | None = None,
+    **kwargs: Any
+) -> list[str]
+```
+
+Add texts to the vector store.
+
+<ParamField path="texts" type="Iterable[str]" required>
+  Texts to add to the vector store
+</ParamField>
+
+<ParamField path="metadatas" type="list[dict] | None">
+  Optional metadata for each text. Must match length of `texts`.
+</ParamField>
+
+<ParamField path="ids" type="list[str] | None">
+  Optional IDs for each text
+</ParamField>
+
+<ParamField path="**kwargs" type="Any">
+  Vector store-specific parameters
+</ParamField>
+
+<ResponseField name="return" type="list[str]">
+  List of IDs of added texts
+</ResponseField>
+
+**Raises:**
+- `ValueError`: If number of metadatas or IDs doesn't match number of texts
+
+#### aadd_texts
+
+```python
+async def aadd_texts(
+    self,
+    texts: Iterable[str],
+    metadatas: list[dict] | None = None,
+    *,
+    ids: list[str] | None = None,
+    **kwargs: Any
+) -> list[str]
+```
+
+Async version of `add_texts`.
+
+#### add_documents
+
+```python
+def add_documents(
+    self,
+    documents: list[Document],
+    **kwargs: Any
+) -> list[str]
+```
+
+Add documents to the vector store.
+
+<ParamField path="documents" type="list[Document]" required>
+  Documents to add. Text is extracted from `page_content`, metadata from `metadata` field.
+</ParamField>
+
+<ResponseField name="return" type="list[str]">
+  List of IDs of added documents
+</ResponseField>
+
+#### aadd_documents
+
+```python
+async def aadd_documents(
+    self,
+    documents: list[Document],
+    **kwargs: Any
+) -> list[str]
+```
+
+Async version of `add_documents`.
+
+#### delete
+
+```python
+def delete(
+    self,
+    ids: list[str] | None = None,
+    **kwargs: Any
+) -> bool | None
+```
+
+Delete documents by ID.
+
+<ParamField path="ids" type="list[str] | None">
+  IDs to delete. If `None`, delete all.
+</ParamField>
+
+<ResponseField name="return" type="bool | None">
+  `True` if successful, `False` if failed, `None` if not implemented
+</ResponseField>
+
+#### adelete
+
+```python
+async def adelete(
+    self,
+    ids: list[str] | None = None,
+    **kwargs: Any
+) -> bool | None
+```
+
+Async version of `delete`.
+
+#### get_by_ids
+
+```python
+def get_by_ids(
+    self,
+    ids: Sequence[str],
+    /
+) -> list[Document]
+```
+
+Get documents by their IDs.
+
+<ParamField path="ids" type="Sequence[str]" required>
+  IDs to retrieve
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  Documents with matching IDs. May return fewer than requested if some IDs not found.
+</ResponseField>
+
+**Note:** Does not raise exceptions for missing IDs. Order not guaranteed to match input.
+
+#### aget_by_ids
+
+```python
+async def aget_by_ids(
+    self,
+    ids: Sequence[str],
+    /
+) -> list[Document]
+```
+
+Async version of `get_by_ids`.
+
+### Similarity Search
+
+#### similarity_search
+
+```python
+def similarity_search(
+    self,
+    query: str,
+    k: int = 4,
+    **kwargs: Any
+) -> list[Document]
+```
+
+Return documents most similar to query. **Must be implemented by subclasses.**
+
+<ParamField path="query" type="str" required>
+  Query text to search for
+</ParamField>
+
+<ParamField path="k" type="int" default="4">
+  Number of documents to return
+</ParamField>
+
+<ParamField path="**kwargs" type="Any">
+  Vector store-specific parameters (e.g., `filter`, `namespace`)
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  List of most similar documents
+</ResponseField>
+
+#### asimilarity_search
+
+```python
+async def asimilarity_search(
+    self,
+    query: str,
+    k: int = 4,
+    **kwargs: Any
+) -> list[Document]
+```
+
+Async similarity search.
+
+#### similarity_search_with_score
+
+```python
+def similarity_search_with_score(
+    self,
+    query: str,
+    k: int = 4,
+    **kwargs: Any
+) -> list[tuple[Document, float]]
+```
+
+Run similarity search with distance scores.
+
+<ResponseField name="return" type="list[tuple[Document, float]]">
+  List of `(document, similarity_score)` tuples
+</ResponseField>
+
+#### asimilarity_search_with_score
+
+```python
+async def asimilarity_search_with_score(
+    self,
+    query: str,
+    k: int = 4,
+    **kwargs: Any
+) -> list[tuple[Document, float]]
+```
+
+Async similarity search with scores.
+
+#### similarity_search_by_vector
+
+```python
+def similarity_search_by_vector(
+    self,
+    embedding: list[float],
+    k: int = 4,
+    **kwargs: Any
+) -> list[Document]
+```
+
+Search using an embedding vector directly.
+
+<ParamField path="embedding" type="list[float]" required>
+  Embedding vector to search with
+</ParamField>
+
+#### similarity_search_with_relevance_scores
+
+```python
+def similarity_search_with_relevance_scores(
+    self,
+    query: str,
+    k: int = 4,
+    *,
+    score_threshold: float | None = None,
+    **kwargs: Any
+) -> list[tuple[Document, float]]
+```
+
+Search with normalized relevance scores (0-1 scale, higher is better).
+
+<ParamField path="score_threshold" type="float | None">
+  Minimum relevance score (0-1). Documents below this are filtered out.
+</ParamField>
+
+<ResponseField name="return" type="list[tuple[Document, float]]">
+  List of `(document, relevance_score)` tuples
+</ResponseField>
+
+### Maximum Marginal Relevance (MMR)
+
+#### max_marginal_relevance_search
+
+```python
+def max_marginal_relevance_search(
+    self,
+    query: str,
+    k: int = 4,
+    fetch_k: int = 20,
+    lambda_mult: float = 0.5,
+    **kwargs: Any
+) -> list[Document]
+```
+
+Return diverse documents using Maximum Marginal Relevance.
+
+<ParamField path="k" type="int" default="4">
+  Number of documents to return
+</ParamField>
+
+<ParamField path="fetch_k" type="int" default="20">
+  Number of documents to fetch before applying MMR
+</ParamField>
+
+<ParamField path="lambda_mult" type="float" default="0.5">
+  Diversity parameter (0-1):
+  - 1: Maximum relevance (no diversity)
+  - 0: Maximum diversity (no relevance)
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  Diverse set of relevant documents
+</ResponseField>
+
+#### amax_marginal_relevance_search
+
+```python
+async def amax_marginal_relevance_search(
+    self,
+    query: str,
+    k: int = 4,
+    fetch_k: int = 20,
+    lambda_mult: float = 0.5,
+    **kwargs: Any
+) -> list[Document]
+```
+
+Async MMR search.
+
+### Unified Search Interface
+
+#### search
+
+```python
+def search(
+    self,
+    query: str,
+    search_type: Literal["similarity", "mmr", "similarity_score_threshold"],
+    **kwargs: Any
+) -> list[Document]
+```
+
+Unified search interface supporting multiple search types.
+
+<ParamField path="search_type" type="str" required>
+  Type of search:
+  - `'similarity'`: Standard similarity search
+  - `'mmr'`: Maximum marginal relevance
+  - `'similarity_score_threshold'`: Similarity with score threshold
+</ParamField>
+
+<ResponseField name="return" type="list[Document]">
+  Search results
+</ResponseField>
+
+#### asearch
+
+```python
+async def asearch(
+    self,
+    query: str,
+    search_type: Literal["similarity", "mmr", "similarity_score_threshold"],
+    **kwargs: Any
+) -> list[Document]
+```
+
+Async unified search.
+
+### Construction Methods
+
+#### from_texts
+
+```python
+@classmethod
+def from_texts(
+    cls,
+    texts: list[str],
+    embedding: Embeddings,
+    metadatas: list[dict] | None = None,
+    **kwargs: Any
+) -> VectorStore
+```
+
+Create a vector store from a list of texts.
+
+<ParamField path="texts" type="list[str]" required>
+  Texts to add
+</ParamField>
+
+<ParamField path="embedding" type="Embeddings" required>
+  Embedding model to use
+</ParamField>
+
+<ParamField path="metadatas" type="list[dict] | None">
+  Metadata for each text
+</ParamField>
+
+<ResponseField name="return" type="VectorStore">
+  New vector store instance
+</ResponseField>
+
+#### afrom_texts
+
+```python
+@classmethod
+async def afrom_texts(
+    cls,
+    texts: list[str],
+    embedding: Embeddings,
+    metadatas: list[dict] | None = None,
+    **kwargs: Any
+) -> VectorStore
+```
+
+Async version of `from_texts`.
+
+#### from_documents
+
+```python
+@classmethod
+def from_documents(
+    cls,
+    documents: list[Document],
+    embedding: Embeddings,
+    **kwargs: Any
+) -> VectorStore
+```
+
+Create a vector store from documents.
+
+<ParamField path="documents" type="list[Document]" required>
+  Documents to add
+</ParamField>
+
+<ParamField path="embedding" type="Embeddings" required>
+  Embedding model to use
+</ParamField>
+
+#### afrom_documents
+
+```python
+@classmethod
+async def afrom_documents(
+    cls,
+    documents: list[Document],
+    embedding: Embeddings,
+    **kwargs: Any
+) -> VectorStore
+```
+
+Async version of `from_documents`.
+
+### Retriever Conversion
+
+#### as_retriever
+
+```python
+def as_retriever(
+    self,
+    *,
+    search_type: Literal["similarity", "mmr", "similarity_score_threshold"] = "similarity",
+    search_kwargs: dict[str, Any] | None = None,
+    **kwargs: Any
+) -> VectorStoreRetriever
+```
+
+Convert the vector store to a retriever.
+
+<ParamField path="search_type" type="str" default="'similarity'">
+  Type of search to use
+</ParamField>
+
+<ParamField path="search_kwargs" type="dict | None">
+  Keyword arguments for search method. Common keys:
+  - `k`: Number of documents
+  - `score_threshold`: Minimum score
+  - `fetch_k`: For MMR
+  - `lambda_mult`: For MMR
+</ParamField>
+
+<ResponseField name="return" type="VectorStoreRetriever">
+  Retriever wrapping the vector store
+</ResponseField>
+
+### Example Usage
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+
+# Create from texts
+vectorstore = FAISS.from_texts(
+    texts=["foo", "bar", "baz"],
+    embedding=OpenAIEmbeddings(),
+    metadatas=[{"source": "a"}, {"source": "b"}, {"source": "c"}]
+)
+
+# Similarity search
+docs = vectorstore.similarity_search("foo", k=2)
+
+# Search with scores
+docs_and_scores = vectorstore.similarity_search_with_score("foo", k=2)
+
+# MMR for diverse results
+docs = vectorstore.max_marginal_relevance_search(
+    "foo",
+    k=2,
+    fetch_k=10,
+    lambda_mult=0.5
+)
+
+# As retriever
+retriever = vectorstore.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={"k": 5, "score_threshold": 0.8}
+)
+docs = retriever.invoke("foo")
+```
+
+## InMemoryVectorStore
+
+Simple in-memory vector store for testing and prototyping.
+
+**Source:** `langchain_core.vectorstores.in_memory`
+
+**Inherits:** `VectorStore`
+
+Stores vectors in memory using numpy for similarity computation.
+
+### Example
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+
+vectorstore = InMemoryVectorStore(embedding=OpenAIEmbeddings())
+
+# Add documents
+vectorstore.add_texts(
+    texts=["LangChain is great", "Vector stores are useful"],
+    metadatas=[{"source": "a"}, {"source": "b"}]
+)
+
+# Search
+results = vectorstore.similarity_search("LangChain", k=1)
+```
+
+## Relevance Score Functions
+
+Vector stores provide static methods for converting distances to relevance scores:
+
+### _euclidean_relevance_score_fn
+
+```python
+@staticmethod
+def _euclidean_relevance_score_fn(distance: float) -> float
+```
+
+Convert Euclidean distance to relevance score (0-1).
+
+### _cosine_relevance_score_fn
+
+```python
+@staticmethod
+def _cosine_relevance_score_fn(distance: float) -> float
+```
+
+Convert cosine distance to relevance score (0-1).
+
+### _max_inner_product_relevance_score_fn
+
+```python
+@staticmethod
+def _max_inner_product_relevance_score_fn(distance: float) -> float
+```
+
+Convert max inner product distance to relevance score.

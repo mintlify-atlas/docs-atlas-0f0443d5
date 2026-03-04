@@ -1,0 +1,370 @@
+---
+title: OpenRouter
+description: Access hundreds of AI models through a unified API with OpenRouter
+---
+
+OpenRouter provides a unified API for accessing hundreds of AI models from multiple providers including OpenAI, Anthropic, Google, Meta, and more. The `langchain-openrouter` integration allows you to use these models in your LangChain applications.
+
+## Installation
+
+Install the `langchain-openrouter` package:
+
+```bash
+pip install langchain-openrouter
+```
+
+## Setup
+
+Get an API key from [OpenRouter](https://openrouter.ai/) and set it as an environment variable:
+
+```bash
+export OPENROUTER_API_KEY="your-api-key"
+```
+
+## Basic Usage
+
+```python
+from langchain_openrouter import ChatOpenRouter
+
+model = ChatOpenRouter(
+    model="anthropic/claude-sonnet-4-5",
+    temperature=0
+)
+
+response = model.invoke("What is the capital of France?")
+print(response.content)
+```
+
+## Available Models
+
+OpenRouter provides access to many models. Popular options include:
+
+- `openai/gpt-4o` - OpenAI GPT-4o
+- `openai/gpt-4o-mini` - OpenAI GPT-4o Mini (cost-effective)
+- `anthropic/claude-sonnet-4-5` - Anthropic Claude Sonnet 4.5
+- `anthropic/claude-opus-4` - Anthropic Claude Opus 4
+- `google/gemini-2.0-flash-exp` - Google Gemini 2.0 Flash
+- `meta-llama/llama-3.3-70b-instruct` - Meta Llama 3.3 70B
+- `openai/o3-mini` - OpenAI O3 Mini (reasoning model)
+
+For a complete list, visit [OpenRouter Models](https://openrouter.ai/models).
+
+## Configuration
+
+### Model Parameters
+
+```python
+from langchain_openrouter import ChatOpenRouter
+
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",
+    temperature=0.7,
+    max_tokens=1000,
+    top_p=0.9,
+    frequency_penalty=0.0,
+    presence_penalty=0.0,
+    seed=42  # For reproducibility
+)
+```
+
+### Provider Preferences
+
+Control which provider handles your request:
+
+```python
+model = ChatOpenRouter(
+    model="anthropic/claude-sonnet-4-5",
+    openrouter_provider={"order": ["Anthropic", "AWS"]}
+)
+```
+
+### App Attribution
+
+Set your app information for OpenRouter attribution:
+
+```python
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",
+    app_url="https://myapp.com",
+    app_title="My App"
+)
+```
+
+### Retry Configuration
+
+```python
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",
+    max_retries=3,  # Number of retry attempts
+    timeout=30000   # Timeout in milliseconds
+)
+```
+
+## Streaming
+
+```python
+from langchain_openrouter import ChatOpenRouter
+
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",
+    streaming=True
+)
+
+for chunk in model.stream("Tell me a story"):
+    print(chunk.content, end="", flush=True)
+```
+
+## Tool Calling
+
+OpenRouter supports tool calling with compatible models:
+
+```python
+from langchain_openrouter import ChatOpenRouter
+from pydantic import BaseModel, Field
+
+class GetWeather(BaseModel):
+    """Get the current weather in a given location."""
+    location: str = Field(description="The city and state, e.g. San Francisco, CA")
+
+model = ChatOpenRouter(model="openai/gpt-4o-mini")
+model_with_tools = model.bind_tools([GetWeather])
+
+response = model_with_tools.invoke("What's the weather in San Francisco?")
+print(response.tool_calls)
+```
+
+## Structured Output
+
+Generate structured outputs using function calling or JSON schema:
+
+### Using Function Calling
+
+```python
+from langchain_openrouter import ChatOpenRouter
+from pydantic import BaseModel, Field
+
+class Joke(BaseModel):
+    """A joke with setup and punchline."""
+    setup: str = Field(description="The setup of the joke")
+    punchline: str = Field(description="The punchline of the joke")
+
+model = ChatOpenRouter(model="openai/gpt-4o-mini")
+structured_model = model.with_structured_output(Joke)
+
+result = structured_model.invoke("Tell me a joke about programming")
+print(f"Setup: {result.setup}")
+print(f"Punchline: {result.punchline}")
+```
+
+### Using JSON Schema
+
+```python
+model = ChatOpenRouter(model="openai/gpt-4o-mini")
+structured_model = model.with_structured_output(
+    Joke,
+    method="json_schema"
+)
+
+result = structured_model.invoke("Tell me a joke")
+```
+
+## Reasoning Models
+
+OpenRouter supports reasoning models with configurable reasoning effort:
+
+```python
+from langchain_openrouter import ChatOpenRouter
+
+model = ChatOpenRouter(
+    model="openai/o3-mini",
+    reasoning={
+        "effort": "high",  # Options: xhigh, high, medium, low, minimal, none
+        "summary": "auto"  # Options: auto, concise, detailed
+    }
+)
+
+response = model.invoke("Solve this math problem: What is 123 * 456?")
+print(response.content)
+
+# Access reasoning content
+if "reasoning_content" in response.additional_kwargs:
+    print(f"Reasoning: {response.additional_kwargs['reasoning_content']}")
+```
+
+## Multi-modal Input
+
+Some models support images and other media:
+
+```python
+from langchain_openrouter import ChatOpenRouter
+from langchain_core.messages import HumanMessage
+
+model = ChatOpenRouter(model="openai/gpt-4o")
+
+message = HumanMessage(
+    content=[
+        {"type": "text", "text": "What's in this image?"},
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/image.jpg"}
+        }
+    ]
+)
+
+response = model.invoke([message])
+print(response.content)
+```
+
+## Cost Tracking
+
+OpenRouter provides cost information in response metadata:
+
+```python
+from langchain_openrouter import ChatOpenRouter
+
+model = ChatOpenRouter(model="openai/gpt-4o-mini")
+response = model.invoke("Hello!")
+
+# Access cost data
+if "cost" in response.response_metadata:
+    print(f"Cost: ${response.response_metadata['cost']}")
+
+# Access token usage
+if response.usage_metadata:
+    print(f"Input tokens: {response.usage_metadata['input_tokens']}")
+    print(f"Output tokens: {response.usage_metadata['output_tokens']}")
+```
+
+## Using with Agents
+
+```python
+from langchain_openrouter import ChatOpenRouter
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import tool
+
+@tool
+def get_current_time() -> str:
+    """Get the current time."""
+    from datetime import datetime
+    return datetime.now().strftime("%H:%M:%S")
+
+model = ChatOpenRouter(model="openai/gpt-4o-mini")
+tools = [get_current_time]
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
+
+agent = create_tool_calling_agent(model, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+
+result = agent_executor.invoke({"input": "What time is it?"})
+print(result["output"])
+```
+
+## Using in RAG Applications
+
+```python
+from langchain_openrouter import ChatOpenRouter
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+
+# Set up vector store (example)
+embeddings = OpenAIEmbeddings()
+vectorstore = FAISS.from_texts(
+    ["Paris is the capital of France.", "London is the capital of England."],
+    embedding=embeddings
+)
+retriever = vectorstore.as_retriever()
+
+# Create RAG chain
+model = ChatOpenRouter(model="anthropic/claude-sonnet-4-5")
+
+prompt = ChatPromptTemplate.from_template(
+    """Answer based on the context:
+
+{context}
+
+Question: {question}"""
+)
+
+def format_docs(docs):
+    return "\n\n".join([doc.page_content for doc in docs])
+
+chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | model
+    | StrOutputParser()
+)
+
+answer = chain.invoke("What is the capital of France?")
+print(answer)
+```
+
+## Advanced Configuration
+
+### Custom Base URL
+
+```python
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",
+    base_url="https://custom-proxy.example.com"
+)
+```
+
+### Route Preferences
+
+```python
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",
+    route="fallback"  # Use fallback routing
+)
+```
+
+### Multiple Completions
+
+```python
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",
+    n=3  # Generate 3 completions
+)
+
+response = model.invoke("Tell me a joke")
+# Access multiple generations from response
+```
+
+## Error Handling
+
+```python
+from langchain_openrouter import ChatOpenRouter
+
+model = ChatOpenRouter(model="openai/gpt-4o-mini")
+
+try:
+    response = model.invoke("Hello!")
+    print(response.content)
+except ValueError as e:
+    print(f"API error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+## API Reference
+
+For detailed API documentation, see:
+- [ChatOpenRouter API Reference](https://reference.langchain.com/python/integrations/langchain_openrouter/chat_models/ChatOpenRouter.html)
+
+## Resources
+
+- [OpenRouter Documentation](https://openrouter.ai/docs)
+- [OpenRouter Models](https://openrouter.ai/models)
+- [PyPI Package](https://pypi.org/project/langchain-openrouter/)
+- [Source Code](https://github.com/langchain-ai/langchain/tree/master/libs/partners/openrouter)
+- [Pricing](https://openrouter.ai/docs/pricing)

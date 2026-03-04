@@ -1,0 +1,493 @@
+---
+title: Messages
+description: Message types for chat-based interactions
+---
+
+## Overview
+
+Messages are the inputs and outputs of chat models. LangChain provides several message types representing different roles in a conversation.
+
+## BaseMessage
+
+Base abstract class for all messages.
+
+**Source:** `langchain_core.messages.base:93`
+
+**Inherits:** `Serializable`
+
+### Properties
+
+<ResponseField name="content" type="str | list[str | dict]" required>
+  The contents of the message. Can be:
+  - A string for simple text
+  - A list of content blocks (text, images, audio, etc.)
+</ResponseField>
+
+<ResponseField name="type" type="str" required>
+  The type of message (e.g., `"human"`, `"ai"`, `"system"`). Used for deserialization.
+</ResponseField>
+
+<ResponseField name="additional_kwargs" type="dict" default="{}">
+  Additional payload data. Used for provider-specific information like tool calls.
+</ResponseField>
+
+<ResponseField name="response_metadata" type="dict" default="{}">
+  Response metadata such as headers, token counts, model name.
+</ResponseField>
+
+<ResponseField name="name" type="str | None" default="None">
+  Optional name for the message.
+</ResponseField>
+
+<ResponseField name="id" type="str | None" default="None">
+  Optional unique identifier for the message.
+</ResponseField>
+
+### Computed Properties
+
+<ResponseField name="content_blocks" type="list[ContentBlock]">
+  Normalized list of content blocks. Lazily parses `content` into standard format.
+</ResponseField>
+
+<ResponseField name="text" type="str">
+  Text content extracted from all text blocks in the message.
+</ResponseField>
+
+### Constructor
+
+```python
+def __init__(
+    self,
+    content: str | list[str | dict] | None = None,
+    content_blocks: list[ContentBlock] | None = None,
+    **kwargs: Any
+)
+```
+
+<ParamField path="content" type="str | list[str | dict] | None">
+  Message content
+</ParamField>
+
+<ParamField path="content_blocks" type="list[ContentBlock] | None">
+  Typed standard content blocks (alternative to `content`)
+</ParamField>
+
+<ParamField path="**kwargs" type="Any">
+  Additional fields like `name`, `id`, `additional_kwargs`
+</ParamField>
+
+## HumanMessage
+
+Message from a human user.
+
+**Source:** `langchain_core.messages.human`
+
+**Inherits:** `BaseMessage`
+
+### Properties
+
+<ResponseField name="type" type="Literal['human']" default="'human'">
+  Message type identifier
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.messages import HumanMessage
+
+msg = HumanMessage(content="Hello, AI!")
+# or with content blocks
+msg = HumanMessage(
+    content=[
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image", "source": {"type": "url", "url": "https://..."}}
+    ]
+)
+```
+
+## AIMessage
+
+Message from an AI assistant.
+
+**Source:** `langchain_core.messages.ai`
+
+**Inherits:** `BaseMessage`
+
+### Properties
+
+<ResponseField name="type" type="Literal['ai']" default="'ai'">
+  Message type identifier
+</ResponseField>
+
+<ResponseField name="tool_calls" type="list[ToolCall]" default="[]">
+  Tool calls made by the AI
+</ResponseField>
+
+<ResponseField name="invalid_tool_calls" type="list[InvalidToolCall]" default="[]">
+  Tool calls that failed to parse
+</ResponseField>
+
+<ResponseField name="usage_metadata" type="UsageMetadata | None" default="None">
+  Token usage information
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.messages import AIMessage
+
+msg = AIMessage(content="Hello! How can I help you?")
+
+# With tool calls
+msg = AIMessage(
+    content="",
+    tool_calls=[
+        {
+            "name": "search",
+            "args": {"query": "weather"},
+            "id": "call_123"
+        }
+    ]
+)
+```
+
+## SystemMessage
+
+System message providing instructions or context.
+
+**Source:** `langchain_core.messages.system`
+
+**Inherits:** `BaseMessage`
+
+### Properties
+
+<ResponseField name="type" type="Literal['system']" default="'system'">
+  Message type identifier
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.messages import SystemMessage
+
+msg = SystemMessage(content="You are a helpful assistant.")
+```
+
+## ChatMessage
+
+Generic message with arbitrary role.
+
+**Source:** `langchain_core.messages.chat`
+
+**Inherits:** `BaseMessage`
+
+### Properties
+
+<ResponseField name="type" type="Literal['chat']" default="'chat'">
+  Message type identifier
+</ResponseField>
+
+<ResponseField name="role" type="str" required>
+  The role of the message sender
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.messages import ChatMessage
+
+msg = ChatMessage(content="Custom message", role="moderator")
+```
+
+## FunctionMessage
+
+Message representing a function response (deprecated in favor of `ToolMessage`).
+
+**Source:** `langchain_core.messages.function`
+
+**Inherits:** `BaseMessage`
+
+### Properties
+
+<ResponseField name="type" type="Literal['function']" default="'function'">
+  Message type identifier
+</ResponseField>
+
+<ResponseField name="name" type="str" required>
+  Name of the function that was called
+</ResponseField>
+
+## ToolMessage
+
+Message representing the result of a tool call.
+
+**Source:** `langchain_core.messages.tool`
+
+**Inherits:** `BaseMessage`
+
+### Properties
+
+<ResponseField name="type" type="Literal['tool']" default="'tool'">
+  Message type identifier
+</ResponseField>
+
+<ResponseField name="tool_call_id" type="str" required>
+  ID of the tool call this message is responding to
+</ResponseField>
+
+<ResponseField name="status" type="Literal['success', 'error'] | None" default="'success'">
+  Status of the tool execution
+</ResponseField>
+
+### Example
+
+```python
+from langchain_core.messages import ToolMessage
+
+msg = ToolMessage(
+    content="Search results: ...",
+    tool_call_id="call_123"
+)
+```
+
+## Message Chunks
+
+Chunk versions of messages used for streaming.
+
+### AIMessageChunk
+
+**Source:** `langchain_core.messages.ai`
+
+Streaming chunk of an AI message.
+
+```python
+from langchain_core.messages import AIMessageChunk
+
+chunk = AIMessageChunk(content="Hello")
+chunk2 = AIMessageChunk(content=" world")
+combined = chunk + chunk2  # AIMessageChunk(content="Hello world")
+```
+
+### HumanMessageChunk
+
+**Source:** `langchain_core.messages.human`
+
+Streaming chunk of a human message.
+
+### SystemMessageChunk
+
+**Source:** `langchain_core.messages.system`
+
+Streaming chunk of a system message.
+
+## Content Blocks
+
+Standard content block types for multimodal messages.
+
+### TextContentBlock
+
+```python
+class TextContentBlock(TypedDict):
+    type: Literal["text"]
+    text: str
+```
+
+Plain text content.
+
+### ImageContentBlock
+
+```python
+class ImageContentBlock(TypedDict, total=False):
+    type: Literal["image"]
+    source: dict  # url, base64, or file_id
+    detail: str  # "auto", "low", "high"
+```
+
+Image content with various source types.
+
+### AudioContentBlock
+
+```python
+class AudioContentBlock(TypedDict):
+    type: Literal["audio"]
+    source: dict  # base64 or url
+```
+
+Audio content.
+
+### VideoContentBlock
+
+```python
+class VideoContentBlock(TypedDict):
+    type: Literal["video"]
+    source: dict  # url or base64
+```
+
+Video content.
+
+### FileContentBlock
+
+```python
+class FileContentBlock(TypedDict):
+    type: Literal["file"]
+    source: dict  # url, base64, or file_id
+```
+
+Generic file content.
+
+## Tool Call Types
+
+### ToolCall
+
+```python
+class ToolCall(TypedDict):
+    name: str
+    args: dict[str, Any]
+    id: str | None
+    type: Literal["tool_call"]  # optional
+```
+
+Represents a tool call made by the AI.
+
+<ParamField path="name" type="str" required>
+  Name of the tool to call
+</ParamField>
+
+<ParamField path="args" type="dict[str, Any]" required>
+  Arguments to pass to the tool
+</ParamField>
+
+<ParamField path="id" type="str | None">
+  Unique identifier for this tool call
+</ParamField>
+
+### InvalidToolCall
+
+```python
+class InvalidToolCall(TypedDict):
+    name: str | None
+    args: str | None
+    id: str | None
+    error: str | None
+    type: Literal["invalid_tool_call"]  # optional
+```
+
+Represents a tool call that failed to parse.
+
+## Usage Metadata
+
+### UsageMetadata
+
+```python
+class UsageMetadata(TypedDict):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    input_token_details: InputTokenDetails  # optional
+    output_token_details: OutputTokenDetails  # optional
+```
+
+Token usage information for a message.
+
+<ParamField path="input_tokens" type="int" required>
+  Count of input tokens
+</ParamField>
+
+<ParamField path="output_tokens" type="int" required>
+  Count of output tokens
+</ParamField>
+
+<ParamField path="total_tokens" type="int" required>
+  Total token count (input + output)
+</ParamField>
+
+### InputTokenDetails
+
+```python
+class InputTokenDetails(TypedDict, total=False):
+    audio: int
+    cache_creation: int
+    cache_read: int
+```
+
+Breakdown of input token counts.
+
+### OutputTokenDetails
+
+```python
+class OutputTokenDetails(TypedDict, total=False):
+    audio: int
+    reasoning: int
+```
+
+Breakdown of output token counts.
+
+## Utility Functions
+
+### convert_to_messages
+
+```python
+def convert_to_messages(
+    messages: Sequence[MessageLikeRepresentation]
+) -> list[BaseMessage]
+```
+
+Convert message-like objects to `BaseMessage` instances.
+
+<ParamField path="messages" type="Sequence" required>
+  Messages to convert. Can be:
+  - `BaseMessage` instances
+  - Tuples like `("human", "hello")`
+  - Dicts with `role` and `content` keys
+</ParamField>
+
+### message_chunk_to_message
+
+```python
+def message_chunk_to_message(chunk: BaseMessageChunk) -> BaseMessage
+```
+
+Convert a message chunk to a complete message.
+
+### trim_messages
+
+```python
+def trim_messages(
+    messages: Sequence[BaseMessage],
+    *,
+    max_tokens: int | None = None,
+    token_counter: Callable[[list[BaseMessage]], int] | None = None,
+    strategy: Literal["first", "last"] = "last",
+    allow_partial: bool = False
+) -> list[BaseMessage]
+```
+
+Trim messages to fit within token limits.
+
+### filter_messages
+
+```python
+def filter_messages(
+    messages: Sequence[BaseMessage],
+    *,
+    include_types: Sequence[type[BaseMessage] | str] | None = None,
+    exclude_types: Sequence[type[BaseMessage] | str] | None = None,
+    include_names: Sequence[str] | None = None,
+    exclude_names: Sequence[str] | None = None,
+    include_ids: Sequence[str] | None = None,
+    exclude_ids: Sequence[str] | None = None
+) -> list[BaseMessage]
+```
+
+Filter messages by type, name, or ID.
+
+### merge_message_runs
+
+```python
+def merge_message_runs(
+    messages: Sequence[BaseMessage],
+    chunk_separator: str = "\n\n"
+) -> list[BaseMessage]
+```
+
+Merge consecutive messages of the same type.

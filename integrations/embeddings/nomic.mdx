@@ -1,0 +1,167 @@
+---
+title: "Nomic Embeddings"
+description: "Embed text and images using Nomic's embedding models"
+icon: "atom"
+---
+
+The `NomicEmbeddings` class provides integration with Nomic's embedding models, supporting both text and image embeddings.
+
+## Installation
+
+```bash
+pip install langchain-nomic
+```
+
+## Setup
+
+Set your Nomic API key:
+
+```bash
+export NOMIC_API_KEY="your-api-key"
+```
+
+## Usage
+
+### Basic usage
+
+```python
+from langchain_nomic import NomicEmbeddings
+
+embed = NomicEmbeddings(
+    model="nomic-embed-text-v1.5"
+)
+```
+
+### Embed single text
+
+```python
+text = "The meaning of life is 42"
+vector = embed.embed_query(text)
+print(len(vector))
+```
+
+### Embed multiple texts
+
+```python
+texts = ["hello world", "goodbye world"]
+vectors = embed.embed_documents(texts)
+print(len(vectors))
+```
+
+## Configuration
+
+### Supported models
+
+**Text models:**
+- `nomic-embed-text-v1.5` - Latest text embedding model (768 dimensions)
+- `nomic-embed-text-v1` - Previous generation text model
+
+**Vision models:**
+- `nomic-embed-vision-v1.5` - Latest vision embedding model
+
+### Inference modes
+
+Nomic supports three inference modes:
+
+#### Remote inference (default)
+
+```python
+embed = NomicEmbeddings(
+    model="nomic-embed-text-v1.5",
+    inference_mode="remote"
+)
+```
+
+#### Local inference
+
+Run embeddings locally using Embed4All:
+
+```python
+embed = NomicEmbeddings(
+    model="nomic-embed-text-v1.5",
+    inference_mode="local",
+    device="cpu"  # or "gpu"
+)
+```
+
+#### Dynamic inference
+
+Automatically choose between local and remote:
+
+```python
+embed = NomicEmbeddings(
+    model="nomic-embed-text-v1.5",
+    inference_mode="dynamic"
+)
+```
+
+### Matryoshka dimensions
+
+Reduce embedding dimensions for faster search:
+
+```python
+embed = NomicEmbeddings(
+    model="nomic-embed-text-v1.5",
+    dimensionality=256  # Reduce from 768 to 256
+)
+```
+
+### Image embeddings
+
+```python
+from langchain_nomic import NomicEmbeddings
+
+embed = NomicEmbeddings(
+    model="nomic-embed-text-v1.5",
+    vision_model="nomic-embed-vision-v1.5"
+)
+
+# Embed images by URI
+image_uris = [
+    "https://example.com/image1.jpg",
+    "file:///path/to/image2.png"
+]
+vectors = embed.embed_image(image_uris)
+```
+
+### Device selection (local mode)
+
+<Warning>
+  Do not use the `device` parameter on macOS.
+</Warning>
+
+For local inference on Linux/Windows:
+
+```python
+embed = NomicEmbeddings(
+    model="nomic-embed-text-v1.5",
+    inference_mode="local",
+    device="nvidia"  # or "cpu", "gpu", "amd"
+)
+```
+
+## Parameters
+
+<ParamField path="model" type="string" required>
+  Name of the Nomic text embedding model to use.
+</ParamField>
+
+<ParamField path="nomic_api_key" type="string" optional>
+  Nomic API key. Automatically inferred from `NOMIC_API_KEY` environment variable if not provided.
+</ParamField>
+
+<ParamField path="dimensionality" type="integer" optional>
+  Embedding dimension for Matryoshka-capable models. Defaults to full-size (768).
+</ParamField>
+
+<ParamField path="inference_mode" type="string" default="remote">
+  How to generate embeddings. Options: `remote`, `local`, or `dynamic`.
+</ParamField>
+
+<ParamField path="device" type="string" optional>
+  Device for local embeddings. Options: `cpu`, `gpu`, `nvidia`, `amd`, or specific device name.
+</ParamField>
+
+<ParamField path="vision_model" type="string" optional>
+  Vision model to use for image embeddings.
+</ParamField>

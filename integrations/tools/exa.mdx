@@ -1,0 +1,259 @@
+---
+title: Exa
+description: Search and retrieve web content using Exa's neural search API
+---
+
+Exa is a neural search engine that provides high-quality web search results optimized for AI applications. The `langchain-exa` integration provides tools and retrievers for searching the web and finding similar content.
+
+## Installation
+
+Install the `langchain-exa` package:
+
+```bash
+pip install langchain-exa
+```
+
+## Setup
+
+Get an API key from [Exa](https://exa.ai/) and set it as an environment variable:
+
+```bash
+export EXA_API_KEY="your-api-key"
+```
+
+## Components
+
+The integration provides three main components:
+
+- **ExaSearchResults** - Tool for neural search
+- **ExaFindSimilarResults** - Tool for finding similar pages
+- **ExaSearchRetriever** - Retriever for RAG applications
+
+## ExaSearchResults Tool
+
+The `ExaSearchResults` tool performs neural search and returns detailed search results.
+
+### Basic Usage
+
+```python
+from langchain_exa import ExaSearchResults
+
+tool = ExaSearchResults()
+results = tool.invoke({"query": "best time to visit japan", "num_results": 5})
+```
+
+### Advanced Features
+
+```python
+from langchain_exa import ExaSearchResults, TextContentsOptions
+
+tool = ExaSearchResults()
+
+# Search with content options
+results = tool.invoke({
+    "query": "artificial intelligence breakthroughs 2024",
+    "num_results": 10,
+    "text_contents_options": {"max_characters": 500},
+    "highlights": True,
+    "summary": True,
+    "type": "neural",  # or "keyword" or "auto"
+    "start_published_date": "2024-01-01",
+    "include_domains": ["arxiv.org", "nature.com"]
+})
+```
+
+### Parameters
+
+- `query` - The search query (required)
+- `num_results` - Number of results to return (1-100, default: 10)
+- `text_contents_options` - Content extraction options:
+  - `True` - Return full text
+  - `{"max_characters": N}` - Limit text length
+- `highlights` - Include highlighted excerpts
+- `summary` - Include AI-generated summaries
+- `type` - Search type: `"neural"`, `"keyword"`, or `"auto"`
+- `include_domains` - Filter to specific domains
+- `exclude_domains` - Exclude specific domains
+- `start_published_date` - Filter by publish date (YYYY-MM-DD)
+- `end_published_date` - Filter by publish date (YYYY-MM-DD)
+- `start_crawl_date` - Filter by crawl date (YYYY-MM-DD)
+- `end_crawl_date` - Filter by crawl date (YYYY-MM-DD)
+- `use_autoprompt` - Auto-optimize query for better results
+- `livecrawl` - Crawl live pages: `"always"`, `"fallback"`, or `"never"`
+
+## ExaFindSimilarResults Tool
+
+Find pages similar to a given URL.
+
+```python
+from langchain_exa import ExaFindSimilarResults
+
+tool = ExaFindSimilarResults()
+results = tool.invoke({
+    "url": "https://example.com/article",
+    "num_results": 5,
+    "exclude_source_domain": True
+})
+```
+
+## ExaSearchRetriever
+
+The retriever is designed for RAG (Retrieval-Augmented Generation) applications.
+
+### Basic Retriever
+
+```python
+from langchain_exa import ExaSearchRetriever
+
+retriever = ExaSearchRetriever(k=10)
+documents = retriever.invoke("best time to visit japan")
+
+for doc in documents:
+    print(f"Title: {doc.metadata['title']}")
+    print(f"URL: {doc.metadata['url']}")
+    print(f"Content: {doc.page_content[:200]}...")
+```
+
+### Retriever with Highlights
+
+```python
+from langchain_exa import ExaSearchRetriever
+
+retriever = ExaSearchRetriever(
+    k=5,
+    highlights=True,
+    text_contents_options={"max_characters": 1000}
+)
+
+documents = retriever.invoke("machine learning research")
+
+for doc in documents:
+    highlights = doc.metadata.get("highlights", [])
+    print(f"Highlights: {highlights}")
+```
+
+### Retriever with Summary
+
+```python
+from langchain_exa import ExaSearchRetriever
+
+retriever = ExaSearchRetriever(
+    k=3,
+    summary=True,
+    type="auto"
+)
+
+documents = retriever.invoke("climate change solutions")
+
+for doc in documents:
+    print(f"Summary: {doc.metadata['summary']}")
+```
+
+### Configuration Options
+
+The retriever supports the same parameters as `ExaSearchResults`:
+
+```python
+retriever = ExaSearchRetriever(
+    k=10,  # Number of results
+    include_domains=["edu", "gov"],
+    exclude_domains=["example.com"],
+    start_published_date="2023-01-01",
+    use_autoprompt=True,
+    type="neural",  # Search type
+    highlights=True,
+    summary=True,
+    livecrawl="fallback"
+)
+```
+
+## Using with Agents
+
+Integrate Exa tools with LangChain agents:
+
+```python
+from langchain_exa import ExaSearchResults, ExaFindSimilarResults
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+
+# Initialize tools
+search_tool = ExaSearchResults()
+similar_tool = ExaFindSimilarResults()
+tools = [search_tool, similar_tool]
+
+# Create agent
+model = ChatOpenAI(model="gpt-4")
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful research assistant."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
+
+agent = create_tool_calling_agent(model, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+
+# Run agent
+result = agent_executor.invoke({
+    "input": "Search for recent AI research papers and find similar articles"
+})
+```
+
+## Using in RAG Chains
+
+Combine with LangChain for retrieval-augmented generation:
+
+```python
+from langchain_exa import ExaSearchRetriever
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+
+# Set up retriever
+retriever = ExaSearchRetriever(
+    k=5,
+    text_contents_options={"max_characters": 1000},
+    summary=True
+)
+
+# Create RAG chain
+prompt = ChatPromptTemplate.from_template(
+    """Answer the question based on the following context:
+
+{context}
+
+Question: {question}
+
+Answer:"""
+)
+
+model = ChatOpenAI(model="gpt-4")
+
+def format_docs(docs):
+    return "\n\n".join([doc.page_content for doc in docs])
+
+chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | model
+    | StrOutputParser()
+)
+
+# Use the chain
+answer = chain.invoke("What are the latest developments in quantum computing?")
+print(answer)
+```
+
+## API Reference
+
+For detailed API documentation, see:
+- [ExaSearchResults API Reference](https://reference.langchain.com/python/integrations/langchain_exa/tools/ExaSearchResults.html)
+- [ExaFindSimilarResults API Reference](https://reference.langchain.com/python/integrations/langchain_exa/tools/ExaFindSimilarResults.html)
+- [ExaSearchRetriever API Reference](https://reference.langchain.com/python/integrations/langchain_exa/retrievers/ExaSearchRetriever.html)
+
+## Resources
+
+- [Exa Documentation](https://docs.exa.ai/)
+- [PyPI Package](https://pypi.org/project/langchain-exa/)
+- [Source Code](https://github.com/langchain-ai/langchain/tree/master/libs/partners/exa)

@@ -1,0 +1,120 @@
+---
+title: DeepSeek
+---
+
+This integration connects DeepSeek's models to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-deepseek
+```
+
+## Setup
+
+Set your DeepSeek API key as an environment variable:
+
+```bash
+export DEEPSEEK_API_KEY="your-api-key"
+```
+
+Get your API key from [platform.deepseek.com](https://platform.deepseek.com).
+
+## Usage
+
+```python
+from langchain_deepseek import ChatDeepSeek
+
+model = ChatDeepSeek(
+    model="deepseek-chat",
+    temperature=0,
+    max_tokens=None,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What is the capital of France?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatDeepSeek
+
+`ChatDeepSeek` extends `ChatOpenAI` and inherits all of its parameters. It's preconfigured to use DeepSeek's API endpoint.
+
+<ParamField path="model" type="str" required>
+  Name of DeepSeek model to use (e.g., `deepseek-chat`, `deepseek-reasoner`).
+</ParamField>
+
+<ParamField path="temperature" type="float" default="1">
+  Sampling temperature. Controls randomness in generation.
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="timeout" type="float | None" default="None">
+  Timeout for requests in seconds.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="2">
+  Maximum number of retries for failed requests.
+</ParamField>
+
+<ParamField path="api_key" type="str | None" default="None">
+  DeepSeek API key. If not provided, reads from `DEEPSEEK_API_KEY` environment variable.
+</ParamField>
+
+## Supported Models
+
+- **DeepSeek-V3**: Latest flagship model with excellent performance
+- **DeepSeek-Chat**: General-purpose chat model
+- **DeepSeek-Reasoner**: Specialized for complex reasoning tasks
+
+See [platform.deepseek.com/api-docs](https://platform.deepseek.com/api-docs) for the latest models.
+
+## Features
+
+- Text generation
+- Function/tool calling
+- Reasoning mode (DeepSeek-Reasoner)
+- Streaming
+- Async support
+- Competitive pricing
+- Support for long context windows
+
+<Note>
+  DeepSeek models are known for their strong reasoning capabilities and cost-effectiveness. The DeepSeek-Reasoner model includes a thinking process similar to OpenAI's o1 series.
+</Note>
+
+## Reasoning Example
+
+For models with reasoning capabilities:
+
+```python
+model = ChatDeepSeek(model="deepseek-reasoner")
+
+response = model.invoke([
+    ("human", "Solve this step by step: If a train leaves at 2pm going 60mph, and another leaves at 3pm going 80mph, when will they meet?")
+])
+
+# Access reasoning content if available
+if hasattr(response, 'additional_kwargs'):
+    reasoning = response.additional_kwargs.get('reasoning_content')
+    if reasoning:
+        print("Reasoning:", reasoning)
+
+print("Answer:", response.content)
+```

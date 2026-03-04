@@ -1,0 +1,159 @@
+---
+title: Perplexity
+---
+
+This integration connects Perplexity's search-augmented models to LangChain.
+
+## Installation
+
+```bash
+pip install -U langchain-perplexity
+```
+
+## Setup
+
+Set your Perplexity API key as an environment variable:
+
+```bash
+export PPLX_API_KEY="your-api-key"
+```
+
+Get your API key from [perplexity.ai](https://www.perplexity.ai/settings/api).
+
+## Usage
+
+```python
+from langchain_perplexity import ChatPerplexity
+
+model = ChatPerplexity(
+    model="sonar",
+    temperature=0.7,
+    max_tokens=None,
+)
+
+messages = [
+    ("system", "You are a helpful assistant."),
+    ("human", "What are the latest developments in AI?"),
+]
+
+response = model.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in model.stream(messages):
+    print(chunk.content, end="")
+```
+
+## API Reference
+
+### ChatPerplexity
+
+<ParamField path="model" type="str" default="sonar">
+  Model name to use (e.g., `sonar`, `sonar-pro`, `sonar-reasoning`).
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.7">
+  Sampling temperature. Controls randomness in generation.
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="timeout" type="float | tuple[float, float] | None" default="None">
+  Timeout for requests to Perplexity completion API.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="6">
+  Maximum number of retries for failed requests.
+</ParamField>
+
+<ParamField path="api_key" type="SecretStr | None" default="None">
+  Perplexity API key. Automatically read from `PPLX_API_KEY` environment variable if not provided.
+</ParamField>
+
+<ParamField path="streaming" type="bool" default="False">
+  Whether to stream the results or not.
+</ParamField>
+
+<ParamField path="search_mode" type="'academic' | 'sec' | 'web' | None" default="None">
+  Search mode for specialized content:
+  - `academic`: Search academic papers and research
+  - `sec`: Search SEC filings
+  - `web`: General web search
+</ParamField>
+
+<ParamField path="reasoning_effort" type="'low' | 'medium' | 'high' | None" default="None">
+  Reasoning effort level: `low`, `medium`, or `high` (default).
+</ParamField>
+
+<ParamField path="language_preference" type="str | None" default="None">
+  Preferred language for responses.
+</ParamField>
+
+<ParamField path="search_domain_filter" type="list[str] | None" default="None">
+  List of domains to filter search results (max 20 domains).
+</ParamField>
+
+<ParamField path="model_kwargs" type="dict" default="{}">
+  Additional model parameters valid for create call not explicitly specified.
+</ParamField>
+
+## Supported Models
+
+- **Sonar**: Fast, search-augmented model for general queries
+- **Sonar Pro**: More capable model with enhanced search
+- **Sonar Reasoning**: Model with advanced reasoning capabilities
+
+See [docs.perplexity.ai/docs/model-cards](https://docs.perplexity.ai/docs/model-cards) for the latest models.
+
+## Features
+
+- Search-augmented generation (retrieves real-time information)
+- Specialized search modes (academic, SEC filings, web)
+- Citations and sources
+- Reasoning capabilities
+- Streaming
+- Async support
+- Domain filtering
+
+<Note>
+  Perplexity models automatically search the web to provide up-to-date, cited answers. This makes them ideal for queries requiring current information or factual verification.
+</Note>
+
+## Search Mode Example
+
+Use specialized search modes for domain-specific queries:
+
+```python
+# Search academic papers
+model = ChatPerplexity(
+    model="sonar-pro",
+    search_mode="academic"
+)
+
+response = model.invoke([
+    ("human", "What are recent breakthroughs in quantum computing?")
+])
+
+# Response will include citations from academic sources
+print(response.content)
+```
+
+## Domain Filtering
+
+Filter search results to specific domains:
+
+```python
+model = ChatPerplexity(
+    model="sonar",
+    search_domain_filter=["arxiv.org", "nature.com", "science.org"]
+)
+
+response = model.invoke([
+    ("human", "Explain the latest findings on dark matter")
+])
+```

@@ -1,0 +1,354 @@
+---
+title: Installation
+description: Install LangChain and configure your development environment
+---
+
+## Requirements
+
+LangChain requires Python 3.10 or higher. You can check your Python version:
+
+```bash
+python --version
+```
+
+<Note>
+  Python versions supported: 3.10, 3.11, 3.12, 3.13, and 3.14
+</Note>
+
+## Install LangChain
+
+<Steps>
+  <Step title="Choose your package manager">
+    LangChain can be installed using pip, uv, or poetry:
+
+    <CodeGroup>
+    ```bash pip
+    pip install langchain
+    ```
+
+    ```bash uv
+    uv add langchain
+    ```
+
+    ```bash poetry
+    poetry add langchain
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Verify installation">
+    Verify LangChain is installed correctly:
+
+    ```python
+    import langchain
+    print(langchain.__version__)
+    ```
+  </Step>
+</Steps>
+
+## Core dependencies
+
+When you install `langchain`, the following core dependencies are automatically included:
+
+- **langchain-core** (>=1.2.10) - Base abstractions and interfaces
+- **langgraph** (>=1.0.8) - Agent orchestration framework
+- **pydantic** (>=2.7.4) - Data validation and settings management
+
+## Optional integrations
+
+LangChain follows a modular architecture. Install only the integrations you need:
+
+<AccordionGroup>
+  <Accordion title="Chat models" icon="comments">
+    Install specific model provider packages:
+
+    <CodeGroup>
+    ```bash OpenAI
+    pip install langchain-openai
+    ```
+
+    ```bash Anthropic
+    pip install langchain-anthropic
+    ```
+
+    ```bash Ollama
+    pip install langchain-ollama
+    ```
+
+    ```bash Google GenAI
+    pip install langchain-google-genai
+    ```
+
+    ```bash Groq
+    pip install langchain-groq
+    ```
+
+    ```bash Mistral AI
+    pip install langchain-mistralai
+    ```
+
+    ```bash Fireworks
+    pip install langchain-fireworks
+    ```
+
+    ```bash DeepSeek
+    pip install langchain-deepseek
+    ```
+
+    ```bash xAI
+    pip install langchain-xai
+    ```
+
+    ```bash Perplexity
+    pip install langchain-perplexity
+    ```
+    </CodeGroup>
+  </Accordion>
+
+  <Accordion title="Embeddings" icon="vector-square">
+    Install embedding provider packages:
+
+    <CodeGroup>
+    ```bash OpenAI
+    pip install langchain-openai
+    ```
+
+    ```bash HuggingFace
+    pip install langchain-huggingface
+    ```
+
+    ```bash Ollama
+    pip install langchain-ollama
+    ```
+    </CodeGroup>
+  </Accordion>
+
+  <Accordion title="Vector stores" icon="database">
+    Install vector store packages:
+
+    <CodeGroup>
+    ```bash Chroma
+    pip install langchain-chroma
+    ```
+
+    ```bash Qdrant
+    pip install langchain-qdrant
+    ```
+    </CodeGroup>
+  </Accordion>
+
+  <Accordion title="Text splitters" icon="scissors">
+    For document processing and chunking:
+
+    ```bash
+    pip install langchain-text-splitters
+    ```
+  </Accordion>
+
+  <Accordion title="Community integrations" icon="users">
+    For additional community-maintained integrations:
+
+    ```bash
+    pip install langchain-community
+    ```
+
+    <Warning>
+      The community package is large and includes many dependencies. Only install if you need integrations not available as standalone packages.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Install with extras
+
+You can install LangChain with optional dependencies using extras:
+
+<CodeGroup>
+```bash OpenAI
+pip install langchain[openai]
+```
+
+```bash Anthropic
+pip install langchain[anthropic]
+```
+
+```bash Ollama
+pip install langchain[ollama]
+```
+
+```bash Multiple extras
+pip install langchain[openai,anthropic,groq]
+```
+</CodeGroup>
+
+## Development setup
+
+For development or contributing to LangChain:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/langchain-ai/langchain.git
+    cd langchain
+    ```
+  </Step>
+
+  <Step title="Install uv">
+    LangChain uses `uv` for dependency management:
+
+    <CodeGroup>
+    ```bash macOS/Linux
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+    ```bash Windows
+    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+
+    ```bash pip
+    pip install uv
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all packages in editable mode:
+
+    ```bash
+    uv sync --all-groups
+    ```
+
+    Or install specific dependency groups:
+
+    ```bash
+    # Test dependencies only
+    uv sync --group test
+
+    # Lint dependencies
+    uv sync --group lint
+    ```
+  </Step>
+
+  <Step title="Run tests">
+    ```bash
+    make test
+    ```
+  </Step>
+</Steps>
+
+## Environment variables
+
+Configure API keys for the integrations you're using:
+
+```bash .env
+# OpenAI
+OPENAI_API_KEY=your-openai-key
+
+# Anthropic
+ANTHROPIC_API_KEY=your-anthropic-key
+
+# Google GenAI
+GOOGLE_API_KEY=your-google-key
+
+# Groq
+GROQ_API_KEY=your-groq-key
+
+# LangSmith (optional, for monitoring)
+LANGSMITH_API_KEY=your-langsmith-key
+LANGSMITH_TRACING=true
+```
+
+<Tip>
+  Use a `.env` file with `python-dotenv` to manage environment variables locally:
+
+  ```python
+  from dotenv import load_dotenv
+  load_dotenv()
+  ```
+</Tip>
+
+## Verify your setup
+
+Create a simple test script to verify everything works:
+
+```python test_setup.py
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+
+# Test core imports
+print("✓ LangChain core imported successfully")
+
+# If you installed a chat model provider:
+try:
+    from langchain_openai import ChatOpenAI
+    model = ChatOpenAI(model="gpt-4o-mini")
+    response = model.invoke([HumanMessage(content="Hello!")])
+    print(f"✓ Chat model works: {response.content[:50]}")
+except ImportError:
+    print("! Chat model provider not installed")
+except Exception as e:
+    print(f"! Error testing chat model: {e}")
+
+print("\n✅ LangChain setup complete!")
+```
+
+Run the test:
+
+```bash
+python test_setup.py
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first LLM application
+  </Card>
+  <Card title="Core concepts" icon="book" href="/concepts/architecture">
+    Learn about the framework architecture
+  </Card>
+  <Card title="Integrations" icon="plug" href="/integrations/overview">
+    Explore available providers
+  </Card>
+  <Card title="Guides" icon="map" href="/guides/building-agents">
+    Follow step-by-step guides
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ImportError: No module named 'langchain'">
+    Make sure you installed LangChain in the correct Python environment:
+
+    ```bash
+    python -m pip install langchain
+    ```
+  </Accordion>
+
+  <Accordion title="Version conflicts">
+    If you encounter dependency conflicts, try creating a fresh virtual environment:
+
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install langchain
+    ```
+  </Accordion>
+
+  <Accordion title="SSL certificate errors">
+    If you encounter SSL errors when installing:
+
+    ```bash
+    pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org langchain
+    ```
+  </Accordion>
+
+  <Accordion title="API key not found">
+    Ensure your environment variables are set correctly. Check with:
+
+    ```python
+    import os
+    print(os.getenv("OPENAI_API_KEY"))
+    ```
+  </Accordion>
+</AccordionGroup>
